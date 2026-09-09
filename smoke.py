@@ -72,38 +72,58 @@ with sync_playwright() as pw:
     check("点行复制到剪贴板", pg.evaluate("navigator.clipboard.readText()") == CODE)
     check("复制 toast", "已复制" in pg.locator("#toast").inner_text())
 
+    # 5b. 左滑露出删除(鼠标模拟滑动)
+    li = pg.locator("li.item", has_text="星神")
+    box = li.bounding_box()
+    pg.mouse.move(box["x"] + box["width"] * 0.7, box["y"] + box["height"] / 2)
+    pg.mouse.down()
+    pg.mouse.move(box["x"] + box["width"] * 0.7 - 140, box["y"] + box["height"] / 2, steps=8)
+    pg.mouse.up()
+    pg.wait_for_timeout(300)  # 等 snap 动画 + click 抑制窗口
+    check("左滑露出删除按钮", li.evaluate("el => el.classList.contains('open')"))
+    check("左滑后未误复制", "星神" not in pg.locator("#toast").inner_text())
+    # 点露出的删除 → 单删确认 → 确认
+    li.locator(".swipe-del").click()
+    check("单删确认文案含名字", "删除「星神」" in pg.locator("#confirm-msg").inner_text())
+    pg.locator("#cf-ok").click()
+    check("滑动删除后剩2", pg.locator("li.item").count() == 2)
+    check("确认删除后滑条收起", pg.locator("li.item.open").count() == 0)
+
     # 6. 筛选记忆
     pg.locator(".chip", has_text="S17").click()
     pg.reload()
     check("重载记住S17筛选", pg.locator("li.item").count() == 1 and "天将九五" in pg.locator("li.item").inner_text())
     pg.locator(".chip", has_text="全部").click()
 
-    # 7. 选择模式:勾选单条 → 底部删除(1) → 确认弹层 → 删除
+    # 7. 选择模式:点勾选圈勾选 → 底部删除(1) → 确认弹层 → 删除
     pg.click("#select-btn")
     check("进入选择模式", pg.evaluate("document.body.classList.contains('select-mode')"))
     check("选择模式行出现勾选圈", pg.locator("li.item .check").first.is_visible())
-    pg.locator("li.item", has_text="福星临门").locator(".item-content").click()
-    check("勾选后行高亮", "sel" in pg.locator("li.item", has_text="福星临门").get_attribute("class"))
+    pg.locator("li.item", has_text="福星临门").locator(".check").click()
+    pg.wait_for_timeout(250)  # 等勾选圈 0.15s 过渡完成
+    check("点勾选圈后行高亮", "sel" in pg.locator("li.item", has_text="福星临门").get_attribute("class"))
+    check("勾选圈黑色主题", pg.evaluate("getComputedStyle(document.querySelector('li.item.sel .check')).backgroundColor") == "rgb(28, 28, 30)")
+    check("选择按钮黑色主题", pg.evaluate("getComputedStyle(document.getElementById('select-btn')).color") == "rgb(28, 28, 30)")
     check("计数显示已选1", "已选 1" in pg.locator("#count").inner_text())
     check("删除按钮文案", pg.locator("#sb-delete").inner_text() == "删除(1)")
     pg.locator("#sb-delete").click()
     check("确认弹层出现", pg.locator("#confirm-sheet.open").count() == 1)
-    check("确认文案含删除1", "删除 1 套" in pg.locator("#confirm-msg").inner_text())
+    check("确认文案含名字", "删除「福星临门」" in pg.locator("#confirm-msg").inner_text())
     pg.locator("#cf-ok").click()
-    check("确认删除后剩2", pg.locator("li.item").count() == 2)
+    check("确认删除后剩1", pg.locator("li.item").count() == 1)
     check("仍在选择模式(未删光)", pg.evaluate("document.body.classList.contains('select-mode')"))
     check("删除后计数复位", "选择阵容" in pg.locator("#count").inner_text())
 
     # 8. localStorage 结构
     stored = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))")
-    check("localStorage 2条", len(stored) == 2)
+    check("localStorage 1条", len(stored) == 1)
     s17 = [x for x in stored if x["code"] == CODE2][0]
     check("S17 条目 season=S17", s17["season"] == "S17")
     check("S17 条目 ts 正常", isinstance(s17["ts"], (int, float)) and s17["ts"] > 1e12)
 
     # 9. 全选删除 → 删光自动退出选择模式
     pg.click("#sb-selectall")
-    check("全选后删除(2)", pg.locator("#sb-delete").inner_text() == "删除(2)")
+    check("全选后删除(1)", pg.locator("#sb-delete").inner_text() == "删除(1)")
     check("全选按钮变取消全选", "取消全选" in pg.locator("#sb-selectall").inner_text())
     pg.locator("#sb-delete").click()
     check("确认文案-全部", "删除 全部阵容" in pg.locator("#confirm-msg").inner_text())
