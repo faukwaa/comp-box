@@ -43,8 +43,7 @@
   .text-btn:active{background:var(--sel-bg)}
   .text-btn.primary{font-weight:600}
   /* 同步按钮 */
-  #sync-btn{display:none; font-size:17px; padding:6px 8px; color:var(--sub)}
-  #sync-btn.ok, #sync-btn.err, #sync-btn.syncing{display:block}
+  #sync-btn{display:block; font-size:17px; padding:6px 8px; color:var(--sub)}
   #sync-btn.ok{color:#30b158}
   #sync-btn.err{color:var(--red)}
   #sync-btn.syncing{color:var(--sub)}
@@ -155,12 +154,12 @@
   body.select-mode .toolbar{display:none}
   .toolbar button{background:none; border:none; color:var(--sub); font-size:13px; cursor:pointer; padding:4px}
   /* ---------- 弹层 ---------- */
-  #sheet, #confirm-sheet{
+  #sheet, #confirm-sheet, #token-sheet{
     position:fixed; inset:0; z-index:10; display:none;
     background:rgba(0,0,0,.35); align-items:flex-end; justify-content:center;
     -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   }
-  #sheet.open, #confirm-sheet.open{display:flex}
+  #sheet.open, #confirm-sheet.open, #token-sheet.open{display:flex}
   .panel{
     width:100%; max-width:640px; background:var(--card);
     border-radius:20px 20px 0 0; padding:10px 16px calc(env(safe-area-inset-bottom) + 16px);
@@ -286,6 +285,21 @@
     <div class="desc" id="confirm-desc">删除后无法恢复</div>
     <button id="cf-cancel">取消</button>
     <button class="del" id="cf-ok">删除</button>
+  </div>
+</div>
+
+<!-- 云同步令牌设置 -->
+<div id="token-sheet">
+  <div class="panel" onclick="event.stopPropagation()">
+    <div class="grab"></div>
+    <h2>☁️ 云同步设置</h2>
+    <p class="hint" style="margin-bottom:0">令牌<strong>只保存在本机浏览器</strong>，用于读写你的私有数据仓（comp-box-data）。获取方式：GitHub → Settings → Developer settings → Fine-grained tokens → 新建（仅授权 comp-box-data 仓，Contents 读写权限）。</p>
+    <label for="cc-token-input">同步令牌</label>
+    <input type="text" id="cc-token-input" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="font-size:13px">
+    <div class="btn-row">
+      <button class="btn ghost" id="btn-token-clear" style="flex:.7">断开</button>
+      <button class="btn primary" id="btn-token-save">保存并同步</button>
+    </div>
   </div>
 </div>
 
@@ -684,7 +698,8 @@ document.getElementById("file").addEventListener("change",function(){
 
 /* ---------- 云同步(GitHub Contents API) ----------
    权威数据存私有仓 comp-box-data/data.json;localStorage 是离线缓存。
-   sha 条件写入防并发;409 冲突→重拉按 ts 合并;删除靠本地墓碑剔除传播。 */
+   sha 条件写入防并发;409 冲突→重拉按 ts 合并;删除靠本地墓碑剔除传播。
+   token 只存本机 localStorage(不进代码仓,防公开泄露),在顶栏同步按钮设置。 */
 var CLOUD={
   repo:"faukwaa/comp-box-data", file:"data.json",
   apiBase:(function(){ try{ return localStorage.getItem("ccApiBase")||"https://api.github.com/repos/"; }catch(e){ return "https://api.github.com/repos/"; } })(),
@@ -808,7 +823,27 @@ async function syncPull(){                          // 云端 → 本地(启动/
 function rememberTombstones(){                      // 删除记账(离线也能传播删除)
   saveSyncMeta();
 }
-document.getElementById("sync-btn").addEventListener("click",function(){ syncPull(); });
+function openTokenSheet(){
+  document.getElementById("cc-token-input").value=CLOUD.token;
+  document.getElementById("token-sheet").classList.add("open");
+}
+function closeTokenSheet(){ document.getElementById("token-sheet").classList.remove("open"); }
+function saveToken(){
+  var t=document.getElementById("cc-token-input").value.trim();
+  if(!t){ toast("令牌不能为空"); return; }
+  try{ localStorage.setItem("ccToken", t); }catch(e){ toast("保存失败"); return; }
+  toast("已保存,正在同步…"); closeTokenSheet();
+  setTimeout(function(){ location.reload(); }, 400);
+}
+function clearToken(){
+  try{ localStorage.removeItem("ccToken"); }catch(e){}
+  toast("已断开云同步"); closeTokenSheet();
+  setTimeout(function(){ location.reload(); }, 400);
+}
+document.getElementById("sync-btn").addEventListener("click",function(){ cloudOn()? syncPull() : openTokenSheet(); });
+document.getElementById("btn-token-save").addEventListener("click",saveToken);
+document.getElementById("btn-token-clear").addEventListener("click",clearToken);
+document.getElementById("token-sheet").addEventListener("click",closeTokenSheet);
 
 /* ---------- init ---------- */
 load(); render();
@@ -816,6 +851,8 @@ if(cloudOn()){
   loadSyncMeta();
   document.getElementById("sync-btn").className="text-btn syncing";
   syncPull();                                       // 启动自动拉取合并
+}else{
+  document.getElementById("sync-btn").title="未配置云同步,点按设置";
 }
 window.__extract=extract; // 供 node 单测
 })();

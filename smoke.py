@@ -22,6 +22,8 @@ def waitfor(fn, timeout=6, interval=0.1):
 with sync_playwright() as pw:
     b = pw.chromium.launch()
     ctx = b.new_context(viewport={"width": 390, "height": 844}, permissions=["clipboard-read", "clipboard-write"])
+    # 测试隔离:默认关闭云端(页面嵌入了真 token,测试不能真连 GitHub;12 段显式注入 mock token)
+    ctx.add_init_script("try{ if(!localStorage.getItem('ccToken')) localStorage.setItem('ccToken',''); }catch(e){}")
     pg = ctx.new_page()
     errs = []
     pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
@@ -232,9 +234,14 @@ with sync_playwright() as pw:
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GHSrv)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     api_base = f"http://127.0.0.1:{srv.server_address[1]}/"
-    # 干净起步:本地空 + 注入 token + API 指向本地服务器 → 启动自动拉取
-    pg.evaluate(f"localStorage.clear(); localStorage.setItem('ccToken','mocktoken0123456789abcdef'); localStorage.setItem('ccApiBase','{api_base}');")
+    # 干净起步:通过 UI 设置面板配 token(API 指向本地服务器),保存后自动同步
+    pg.evaluate(f"localStorage.clear(); localStorage.setItem('ccApiBase','{api_base}');")
     pg.reload()
+    pg.click("#sync-btn")                            # 未配置 → 打开令牌设置
+    check("点同步按钮打开令牌设置", pg.locator("#token-sheet.open").count() == 1)
+    pg.fill("#cc-token-input", "mocktoken0123456789abcdef")
+    pg.click("#btn-token-save")
+    pg.wait_for_timeout(1200)                        # 保存触发 reload+同步
     check("同步按钮显示", waitfor(lambda: pg.locator("#sync-btn.ok").count() == 1))
     # 12a. 保存 → 自动推云端
     pg.click("#fab"); pg.fill("#raw", "【云端一号】" + CODE); pg.click("#btn-save")
