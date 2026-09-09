@@ -44,6 +44,7 @@ with sync_playwright() as pw:
 
     # 1c. grabber 下拉 / 点击 关闭表单
     pg.click("#fab")
+    pg.wait_for_timeout(450)  # 等 sheet 弹出动画完成再拖
     check("表单打开", pg.locator("#sheet.open").count() == 1)
     gb = pg.locator("#sheet-grab").bounding_box()
     pg.mouse.move(gb["x"] + gb["width"] / 2, gb["y"] + gb["height"] / 2)
@@ -220,6 +221,28 @@ with sync_playwright() as pw:
     pg.locator("li.item", has_text="裁决婕拉").locator(".tag:not(.season)").click()
     check("点标签徽章启用上分筛", pg.locator("li.item").count() == 1 and "上分" in pg.locator("#count").inner_text())
     check("S18+上分 命中裁决", "裁决婕拉" in pg.locator("li.item").inner_text())
+
+    # 11b. 左滑编辑阵容
+    pg.locator("#seasons .chip", has_text="全部").click()
+    pg.locator("#tag-chips .chip", has_text="全部标签").click()
+    li_e = pg.locator("li.item", has_text="裁决婕拉")
+    bx = li_e.bounding_box()
+    pg.mouse.move(bx["x"] + bx["width"] * 0.7, bx["y"] + bx["height"] / 2)
+    pg.mouse.down(); pg.mouse.move(bx["x"] + bx["width"] * 0.7 - 200, bx["y"] + bx["height"] / 2, steps=8); pg.mouse.up()
+    pg.wait_for_timeout(300)
+    check("左滑露出编辑+删除", li_e.locator(".swipe-edit").is_visible() and li_e.locator(".swipe-del").is_visible())
+    li_e.locator(".swipe-edit").click()
+    check("编辑表单标题", pg.locator("#sheet-title").inner_text() == "编辑阵容")
+    check("编辑预填名字", pg.input_value("#name") == "裁决婕拉")
+    check("编辑预填赛季", pg.input_value("#season") == "S18")
+    check("编辑预填码", pg.input_value("#raw").startswith(CODE[:10]))
+    pg.fill("#name", "裁决新名")
+    pg.fill("#tag", "烂分")
+    pg.click("#btn-save")
+    check("保存更新 toast", waitfor(lambda: "已更新" in pg.locator("#toast").inner_text()))
+    check("列表显示新名字", "裁决新名" in pg.locator("#list").inner_text())
+    check("原名字消失", "裁决婕拉" not in pg.locator("#list").inner_text())
+    check("编辑后条数不变", pg.locator("li.item").count() == 4)
 
     # 12. 云同步(真实本地 HTTP 服务器模拟 GitHub contents API)
     import http.server, threading

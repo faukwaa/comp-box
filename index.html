@@ -87,19 +87,20 @@
     box-shadow:0 1px 2px rgba(0,0,0,.03);
     position:relative; overflow:hidden;
   }
-  /* 左滑露出的删除(在内容下层,右缘) */
-  .swipe-bg{position:absolute; top:0; right:0; bottom:0; width:96px}
-  .swipe-del{
-    width:100%; height:100%; border:none; background:var(--red); color:#fff;
-    font-size:15px; font-weight:600; cursor:pointer;
+  /* 左滑露出的操作(编辑/删除,在内容下层,右缘) */
+  .swipe-bg{position:absolute; top:0; right:0; bottom:0; width:168px; display:flex}
+  .swipe-del, .swipe-edit{
+    width:50%; border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;
   }
+  .swipe-del{background:var(--red)}
+  .swipe-edit{background:#767680}
   .swipe-content{
     position:relative; display:flex; align-items:center; gap:12px;
     background:var(--card); touch-action:pan-y;
     transition:transform .22s cubic-bezier(.16,1,.3,1);
     will-change:transform;
   }
-  .item.open .swipe-content{transform:translateX(-96px)}
+  .item.open .swipe-content{transform:translateX(-168px)}
   .item.dragging .swipe-content{transition:none}
   .check{
     width:24px; height:24px; border-radius:50%; flex-shrink:0;
@@ -291,8 +292,8 @@
 <div id="sheet">
   <div class="panel" onclick="event.stopPropagation()">
     <div class="grab-zone" id="sheet-grab"><div class="grab"></div></div>
-    <h2>存阵容</h2>
-    <p class="hint">从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字</p>
+    <h2 id="sheet-title">存阵容</h2>
+    <p class="hint" id="sheet-hint">从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字</p>
     <label for="raw">粘贴内容</label>
     <textarea id="raw" placeholder="长按粘贴…&#10;例：【福星临门】h5dySUPLXQxxxx…&#10;或纯阵容码"></textarea>
     <button type="button" class="paste-btn" id="btn-paste">📋 从剪贴板粘贴</button>
@@ -343,7 +344,7 @@
 var KEY="jccCompCodes.v1", FILTER_KEY="jccCompCodes.seasonFilter", TAG_FILTER_KEY="jccCompCodes.tagFilter", LAST_SEASON_KEY="jccCompCodes.lastSeason";
 var DEFAULT_SEASON="S18"; // 当前赛季,换季改这里
 var list=[], q="", seasonFilter=null, tagFilter=null; // null=全部
-var selecting=false, selected={}, tagExpanded=false;
+var selecting=false, selected={}, tagExpanded=false, editingId=null;
 
 /* ---------- 纯函数:粘贴解析（node 可测） ---------- */
 // 金铲铲/云顶阵容码:【阵容码】开头的长字母数字串(hex/base64,可能被中文/括号裹着)。挑最长 alnum 串当码,余文当名字。
@@ -455,7 +456,7 @@ function render(){
   ul.innerHTML=rows.map(function(it){
     var sel=selected[it.id]?true:false;
     return '<li class="item'+(sel?" sel":"")+'" data-id="'+it.id+'">'+
-      '<div class="swipe-bg"><button class="swipe-del" type="button">删除</button></div>'+
+      '<div class="swipe-bg"><button class="swipe-edit" type="button">编辑</button><button class="swipe-del" type="button">删除</button></div>'+
       '<div class="swipe-content">'+
         '<span class="check">'+CHECK_SVG+'</span>'+
         '<div class="item-content">'+
@@ -555,12 +556,16 @@ function refreshSeasonSuggest(){
   [DEFAULT_SEASON, "S19","S17"].forEach(function(s){ if(!seen[s]){seen[s]=1; opts.push(s);} });
   box.innerHTML=opts.map(function(s){ return '<option value="'+esc(s)+'">'; }).join("");
 }
-function openSheet(){
-  document.getElementById("raw").value="";
-  document.getElementById("name").value="";
-  document.getElementById("tag").value="";
-  document.getElementById("season").value=lastSeason();
+function openSheet(item){
+  editingId=item? item.id : null;
+  document.getElementById("raw").value=item? (item.code||"") : "";
+  document.getElementById("name").value=item? (item.name||"") : "";
+  document.getElementById("tag").value=item? (item.tag||"") : "";
+  document.getElementById("season").value=item? (item.season||DEFAULT_SEASON) : lastSeason();
+  document.getElementById("name").dataset.touched=item? "1" : ""; // 编辑态不自动带出名字
   refreshSeasonSuggest();
+  document.getElementById("sheet-title").textContent=item? "编辑阵容" : "存阵容";
+  document.getElementById("sheet-hint").textContent=item? "修改后点保存（阵容码也可改）" : "从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字";
   document.getElementById("sheet").classList.add("open");
   // 不自动读剪贴板(避免 iOS 系统粘贴条/权限浮层干扰表单),由用户点「从剪贴板粘贴」触发
 }
@@ -628,7 +633,7 @@ function closeSheet(){ document.getElementById("sheet").classList.remove("open")
 })();
 
 /* ---------- 事件 ---------- */
-document.getElementById("fab").addEventListener("click",openSheet);
+document.getElementById("fab").addEventListener("click",function(){ openSheet(null); });
 document.getElementById("btn-cancel").addEventListener("click",closeSheet);
 document.getElementById("btn-paste").addEventListener("click",pasteFromClipboard);
 document.getElementById("sheet").addEventListener("click",closeSheet);
@@ -655,7 +660,7 @@ document.getElementById("tag-chips").addEventListener("click",function(ev){
   render();
 });
 /* ---------- 左滑删除(常态;选择模式下滑动禁用) ---------- */
-var SWIPE_W=96, drag=null, suppressClickUntil=0;
+var SWIPE_W=168, drag=null, suppressClickUntil=0;
 function closeSwipes(excludeLi){
   var o=document.querySelectorAll("li.item.open");
   for(var i=0;i<o.length;i++) if(!excludeLi||o[i]!==excludeLi) o[i].classList.remove("open");
@@ -704,6 +709,13 @@ document.getElementById("list").addEventListener("click",function(ev){
   if(Date.now()<suppressClickUntil){ suppressClickUntil=0; return; } // 刚拖完的合成 click
   var li=ev.target.closest("li.item"); if(!li) return;
   var id=li.dataset.id;
+  var editBtn=ev.target.closest(".swipe-edit");
+  if(editBtn){                                   // 滑动露出的编辑
+    var eit=null;
+    for(var i=0;i<list.length;i++) if(list[i].id===id) eit=list[i];
+    if(eit){ closeSwipes(); openSheet(eit); }
+    return;
+  }
   var delBtn=ev.target.closest(".swipe-del");
   if(delBtn){ requestDelete([id]); return; }  // 滑动露出的删除
   if(selecting){ toggleSelect(id); return; }  // 选择模式:点任意处(含勾选圈)=切换
@@ -744,9 +756,16 @@ document.getElementById("btn-save").addEventListener("click",function(){
   if(!r.code){ toast("没认到阵容码，请检查粘贴内容"); return; }
   var code=r.code;
   try{ localStorage.setItem(LAST_SEASON_KEY, season); }catch(e){}
-  list.push(makeItem(code, nm||r.name||"(未命名)", tag, season));
-  save(); render(); toast("已存入");
-  closeSheet();
+  if(editingId){
+    var it=null;
+    for(var i=0;i<list.length;i++) if(list[i].id===editingId) it=list[i];
+    if(it){ it.code=code; it.name=nm||it.name; it.tag=tag; it.season=season; toast("已更新"); }
+  }else{
+    list.push(makeItem(code, nm||r.name||"(未命名)", tag, season));
+    toast("已存入");
+  }
+  editingId=null;
+  save(); render(); closeSheet();
   if(cloudOn()) syncPush();
 });
 document.getElementById("btn-export").addEventListener("click",function(){
