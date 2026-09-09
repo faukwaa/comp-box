@@ -128,12 +128,9 @@
   }
   .empty{text-align:center; color:var(--sub); padding:70px 24px; font-size:15px; line-height:1.8}
   .big{font-size:46px; margin-bottom:12px}
-  .big .coin{position:relative; width:58px; height:58px; margin:0 auto 4px}
-  .big .coin svg{width:58px; height:58px; display:block; filter:drop-shadow(0 2px 6px rgba(168,110,20,.35))}
-  .big .coin img{
-    position:absolute; left:50%; top:53%; width:33px; height:33px;
-    transform:translate(-50%,-50%);
-    filter:drop-shadow(0 1px 2px rgba(90,50,0,.35));
+  .big img.empty-badge{
+    width:76px; height:76px; display:block; margin:0 auto 6px;
+    filter:drop-shadow(0 2px 8px rgba(0,0,0,.18));
   }
   /* ---------- 底部:选择操作条 ---------- */
   #select-bar{
@@ -258,23 +255,7 @@
 <ul id="list"></ul>
 <div id="empty" class="empty" hidden>
   <div class="big">
-    <div class="coin">
-      <svg viewBox="0 0 64 64" aria-hidden="true">
-        <defs>
-          <radialGradient id="coinG" cx="38%" cy="30%" r="80%">
-            <stop offset="0%" stop-color="#ffe9a8"/>
-            <stop offset="45%" stop-color="#f4c550"/>
-            <stop offset="80%" stop-color="#db9d2c"/>
-            <stop offset="100%" stop-color="#a06a12"/>
-          </radialGradient>
-        </defs>
-        <circle cx="32" cy="32" r="29.5" fill="url(#coinG)" stroke="#8a5a10" stroke-width="2.2"/>
-        <circle cx="32" cy="32" r="24" fill="none" stroke="#b07f1d" stroke-width="1.4" opacity=".85"/>
-        <circle cx="32" cy="32" r="20.5" fill="none" stroke="#8a5a10" stroke-width=".8" opacity=".5"/>
-        <ellipse cx="21" cy="18.5" rx="9" ry="4.6" fill="#fff7da" opacity=".6" transform="rotate(-20 21 18.5)"/>
-      </svg>
-      <img src="spatula.png" alt="金铲铲" width="33" height="33">
-    </div>
+    <img class="empty-badge" src="emblem.png" alt="金铲铲之战" width="76" height="76">
   </div>
   <div id="empty-text">还没有阵容码<br>点下面「存阵容」把好阵容收进来</div>
 </div>
