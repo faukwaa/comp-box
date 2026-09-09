@@ -305,7 +305,24 @@ function openSheet(){
   refreshSeasonSuggest();
   document.getElementById("sheet-title").textContent="存阵容";
   document.getElementById("sheet").classList.add("open");
+  tryReadClipboard(); // 点按钮=用户手势,Safari 允许读剪贴板(首次弹权限)
   document.getElementById("raw").focus();
+}
+function tryReadClipboard(){
+  if(!navigator.clipboard||!navigator.clipboard.readText) return; // 老浏览器不支持
+  navigator.clipboard.readText().then(function(t){
+    if(!document.getElementById("sheet").classList.contains("open")) return; // 已关闭则弃
+    t=(t||"").trim();
+    if(!t) return;                      // 剪贴板空
+    var ta=document.getElementById("raw");
+    if(ta.value&&ta.value!==t) return;  // 用户已手动输入/粘贴,别覆盖
+    var r=extract(t);
+    if(!r.code) return;                 // 不是阵容码(如刚复制的密码),别碰
+    ta.value=t;
+    var nm=document.getElementById("name");
+    if(!nm.dataset.touched&&!nm.value) nm.value=r.name;
+    toast("已从剪贴板读取");
+  },function(){ /* 权限被拒:静默,用户可长按手动粘贴 */ });
 }
 function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
 

@@ -31,13 +31,25 @@ with sync_playwright() as pw:
     check("chip 含 S18", pg.locator(".chip", has_text="S18").count() >= 1)
     check("chip 含 全部", pg.locator(".chip", has_text="全部").count() == 1)
 
-    # 2. 存 S17
+    # 1b. 点击存阵容自动读剪贴板
+    pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE}')")
+    pg.click("#fab")
+    pg.wait_for_timeout(400)  # 等 readText promise 落地
+    auto = pg.input_value("#raw")
+    check("剪贴板自动填入 raw", auto == f"【星神】{CODE}")
+    check("剪贴板自动带出名字", pg.input_value("#name") == "星神")
+    pg.click("#btn-save")
+    check("存2:剪贴板流程入库", pg.locator("li.item").count() == 2)
+
+    # 2. 存 S17(此步同时验证:剪贴板里有【星神】CODE,但手动输入不被自动读取覆盖)
     pg.click("#fab")
     pg.fill("#raw", CODE2)
     pg.fill("#name", "天将九五")
     pg.fill("#season", "S17")
+    pg.wait_for_timeout(400)  # 给 readText resolve 窗口
+    check("手动输入不被剪贴板覆盖", pg.input_value("#raw") == CODE2)
     pg.click("#btn-save")
-    check("存2:S17 列表2条", pg.locator("li.item").count() == 2)
+    check("存3:S17 列表3条", pg.locator("li.item").count() == 3)
     check("chip 含 S17", pg.locator(".chip", has_text="S17").count() == 1)
 
     # 3. 赛季筛选:S17 chip → 只见 S17
@@ -46,17 +58,17 @@ with sync_playwright() as pw:
     check("筛S17 命中天将九五", "天将九五" in pg.locator("li.item").inner_text())
     check("S17 徽标在卡片上", pg.locator("li.item .tag.season").inner_text() == "S17")
     pg.locator(".chip", has_text="S18").click()
-    check("筛S18 1条", pg.locator("li.item").count() == 1)
-    check("筛S18 命中福星临门", "福星临门" in pg.locator("li.item").inner_text())
-    check("S18 徽标在卡片上", pg.locator("li.item .tag.season").inner_text() == "S18")
+    check("筛S18 2条", pg.locator("li.item").count() == 2)
+    check("筛S18 命中福星临门", "福星临门" in pg.locator("li.item", has_text="福星临门").inner_text())
+    check("S18 徽标在卡片上", pg.locator("li.item .tag.season").first.inner_text() == "S18")
     pg.locator(".chip", has_text="全部").click()
-    check("回全部 2条", pg.locator("li.item").count() == 2)
+    check("回全部 3条", pg.locator("li.item").count() == 3)
 
     # 4. 搜索与赛季叠加:全部+S18下搜索九五
     pg.fill("#search", "九五")
     check("搜九五 1条", pg.locator("li.item").count() == 1)
     pg.fill("#search", "")
-    check("清搜索 2条", pg.locator("li.item").count() == 2)
+    check("清搜索 3条", pg.locator("li.item").count() == 3)
 
     # 5. 复制(真实剪贴板权限)
     pg.locator("li.item", has_text="福星临门").locator(".copy").click()
@@ -72,17 +84,19 @@ with sync_playwright() as pw:
     # 7. 删除
     pg.on("dialog", lambda d: d.accept())
     pg.locator("li.item", has_text="福星临门").locator(".del").click()
-    check("删后剩 1", pg.locator("li.item").count() == 1)
+    check("删后剩 2", pg.locator("li.item").count() == 2)
     check("toast 已删除", "已删除" in pg.locator("#toast").inner_text())
 
     # 8. localStorage 结构断言
     stored = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))")
-    check("localStorage 1条", len(stored) == 1)
-    check("season 字段=S17", stored[0]["season"] == "S17")
-    check("数据含 ts", isinstance(stored[0]["ts"], (int, float)) and stored[0]["ts"] > 0)
+    check("localStorage 2条", len(stored) == 2)
+    s17 = [x for x in stored if x["code"] == CODE2][0]
+    check("S17 条目 season 字段=S17", s17["season"] == "S17")
+    check("S17 条目 ts 正常", isinstance(s17["ts"], (int, float)) and s17["ts"] > 1e12)
 
     # 9. 删光该赛季自动回全部
-    pg.locator("li.item .del").click()
+    pg.locator("li.item .del").first.click()
+    pg.locator("li.item .del").first.click()
     check("删光后回全部(无卡死)", pg.locator("li.item").count() == 0)
     check("全部 chip 激活", "全部" in pg.locator("#seasons .chip.on").inner_text())
 
