@@ -33,6 +33,7 @@ with sync_playwright() as pw:
 
     CODE = "H4sIAAAAAAAAAOy8VWxbO1Ll2fb5zz+vvvrL7H7/OW/v9/6"
     CODE2 = CODE[:-1] + "7"
+    CODE3 = CODE2[:-1] + "8"
 
     # 1. 存 S18:粘贴带名字文案
     pg.click("#fab")
@@ -41,6 +42,13 @@ with sync_playwright() as pw:
     check("存1:S18 列表1条", pg.locator("li.item").count() == 1)
     check("chip 含 S18", pg.locator("#seasons .chip", has_text="S18").count() >= 1)
     check("选择按钮出现", pg.locator("#select-btn").is_visible())
+
+    # 1a. 同码去重:再存一次相同阵容码 → 不重复添加
+    pg.click("#fab")
+    pg.fill("#raw", "【福星临门】" + CODE)
+    pg.click("#btn-save")
+    check("同码不重复存", waitfor(lambda: "不重复添加" in pg.locator("#toast").inner_text()))
+    check("同码后仍1条", pg.locator("li.item").count() == 1)
 
     # 1c. grabber 下拉关闭 / 点击横线不关闭(按用户要求移除点击关)
     pg.click("#fab")
@@ -61,21 +69,21 @@ with sync_playwright() as pw:
     check("点背景关闭表单", waitfor(lambda: pg.locator("#sheet.open").count() == 0))
 
     # 1b. 点「从剪贴板粘贴」按钮读取
-    pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE}')")
+    pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE2}')")
     pg.click("#fab")
     pg.click("#btn-paste")
-    check("粘贴按钮读入 raw", waitfor(lambda: pg.input_value("#raw") == f"【星神】{CODE}", timeout=5))
+    check("粘贴按钮读入 raw", waitfor(lambda: pg.input_value("#raw") == f"【星神】{CODE2}", timeout=5))
     check("粘贴自动带出名字", pg.input_value("#name") == "星神")
     pg.click("#btn-save")
     check("存2:剪贴板流程入库", pg.locator("li.item").count() == 2)
 
     # 2. 存 S17(手动输入不被剪贴板自动读覆盖)
     pg.click("#fab")
-    pg.fill("#raw", CODE2)
+    pg.fill("#raw", CODE3)
     pg.fill("#name", "天将九五")
     pg.fill("#season", "S17")
     pg.wait_for_timeout(400)
-    check("手动输入不被剪贴板覆盖", pg.input_value("#raw") == CODE2)
+    check("手动输入不被剪贴板覆盖", pg.input_value("#raw") == CODE3)
     pg.click("#btn-save")
     check("存3:S17 列表3条", pg.locator("li.item").count() == 3)
 
@@ -162,7 +170,7 @@ with sync_playwright() as pw:
     # 8. localStorage 结构
     stored = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))")
     check("localStorage 1条", len(stored) == 1)
-    s17 = [x for x in stored if x["code"] == CODE2][0]
+    s17 = [x for x in stored if x["code"] == CODE3][0]
     check("S17 条目 season=S17", s17["season"] == "S17")
     check("S17 条目 ts 正常", isinstance(s17["ts"], (int, float)) and s17["ts"] > 1e12)
 
@@ -320,11 +328,18 @@ with sync_playwright() as pw:
     # 12d. 409 冲突:别端在本地不知情时改云 → 本地保存触发冲突 → 自动合并两端新增
     GH["items"].append({"id": "remote2", "code": CODE, "name": "别端新阵容", "tag": "", "season": "S18", "ts": int(time.time() * 1000) + 2})
     GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])   # 本地 sync meta 的 sha 已过期
-    pg.click("#fab"); pg.fill("#raw", "【本地新阵容】" + CODE2); pg.click("#btn-save")
+    pg.click("#fab"); pg.fill("#raw", "【本地新阵容】" + CODE3); pg.click("#btn-save")
     check("冲突自动合并(云端含两端新增)", waitfor(lambda: len(GH["items"]) == 3 and
         any(x["name"] == "别端新阵容" for x in GH["items"]) and any(x["name"] == "本地新阵容" for x in GH["items"])))
     check("合并后本地 3 条", pg.locator("li.item").count() == 3)
     check("同步按钮回到绿色", waitfor(lambda: pg.locator("#sync-btn.ok").count() == 1))
+    # 12e. 防复活:云端没有的旧本地副本(创建早于上次同步=别端删过的) → 重载后被剔除,不推回
+    pg.evaluate(f"""localStorage.setItem('jccCompCodes.v1', JSON.stringify([...JSON.parse(localStorage.getItem('jccCompCodes.v1')), {{id:'ghost1',code:'{CODE3}x',name:'旧副本幽灵',tag:'',season:'S18',ts:Date.now()-86400000}}]))""")
+    pg.evaluate("localStorage.setItem('jccCompCodes.sync', JSON.stringify({sha:'shaX', tomb:[], at: Date.now()}))")
+    pg.reload()
+    check("旧副本被剔除(防复活)", waitfor(lambda: "旧副本幽灵" not in pg.locator("#list").inner_text()))
+    check("剔除后条数正常", pg.locator("li.item").count() == 3)
+    check("云端未被幽灵污染", len(GH["items"]) == 3 and not any(x["id"] == "ghost1" for x in GH["items"]))
     srv.shutdown()
     pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
 

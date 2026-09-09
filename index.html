@@ -888,6 +888,15 @@ document.getElementById("btn-save").addEventListener("click",function(){
   if(!r.code){ toast("没认到阵容码，请检查粘贴内容"); return; }
   var code=r.code;
   try{ localStorage.setItem(LAST_SEASON_KEY, season); }catch(e){}
+  // 同码去重:同一阵容码只存一份;编辑未改码时放行(历史重复数据允许继续编辑)
+  var dup=null;
+  for(var i=0;i<list.length;i++) if(list[i].code===code&&list[i].id!==editingId) dup=list[i];
+  if(dup&&editingId){
+    var curIt=null;
+    for(var i=0;i<list.length;i++) if(list[i].id===editingId) curIt=list[i];
+    if(curIt&&curIt.code===code) dup=null;          // 编辑保留原码,不拦
+  }
+  if(dup){ toast("已存过「"+dup.name+"」，相同阵容码不重复添加"); closeSheet(); return; }
   if(editingId){
     var it=null;
     for(var i=0;i<list.length;i++) if(list[i].id===editingId) it=list[i];
@@ -922,7 +931,12 @@ document.getElementById("file").addEventListener("change",function(){
       });
       if(!arr.length){ toast("文件里没有阵容码"); return; }
       if(confirm("导入 "+arr.length+" 套？将追加到现有列表")){
-        list=list.concat(arr); save(); render(); toast("导入成功");
+        var have={};
+        list.forEach(function(x){ have[x.code]=1; });
+        var fresh=[];
+        arr.forEach(function(x){ if(!have[x.code]){ have[x.code]=1; fresh.push(x); } });
+        list=list.concat(fresh); save(); render();
+        toast(fresh.length===arr.length? "导入成功 "+arr.length+" 套" : "导入 "+fresh.length+" 套，跳过重复 "+(arr.length-fresh.length)+" 套");
         if(cloudOn()) syncPush();
       }
     }catch(e){ toast("文件格式不对"); }
@@ -957,7 +971,11 @@ function b64decode(b64){
 function loadSyncMeta(){
   try{
     var s=JSON.parse(localStorage.getItem(SYNCS_KEY)||"null");
-    if(s){ CLOUD.sha=s.sha||null; tombstones=(s.tomb||[]).slice(); }
+    if(s){
+      CLOUD.sha=s.sha||null;
+      tombstones=s.tomb||[];
+      SYNC_AT=(s.at&&s.at>0)? s.at : 0;
+    }
   }catch(e){}
 }
 function saveSyncMeta(){
@@ -1006,6 +1024,22 @@ function mergeByTs(cloudItems, localItems){
   });
   return out;
 }
+var SYNC_AT=0;  // 上次成功同步时刻(loadSyncMeta 启动时读)
+// 防复活:云端已不存在的本地条目,若创建早于上次成功同步(=别端删过的旧副本),
+// 跟随云端删除,避免 A 设备删除后被 B 设备本地副本推回复活。真正新增(ts 新)不受影响。
+function mergeLists(cloudItems, localItems){
+  var cut=SYNC_AT-6000;
+  if(cut>0){
+    var cids={};
+    cloudItems.forEach(function(it){ cids[it.id]=1; });
+    localItems=localItems.filter(function(it){
+      if(cids[it.id]||tombstones.indexOf(it.id)>-1) return true;
+      if(!it.ts||it.ts>cut) return true;
+      return false;                                 // 旧副本→剔除
+    });
+  }
+  return mergeByTs(cloudItems, localItems);
+}
 function setSyncUI(mode, label){
   var b=document.getElementById("sync-btn");
   b.className="text-btn "+mode;
@@ -1024,7 +1058,7 @@ async function syncPush(){                          // 本地改动 → 云端
         var g=await cloudGet();
         if(!g){ await cloudPut(list); }
         else{
-          var merged=mergeByTs(g.items, list);
+          var merged=mergeLists(g.items, list);
           list=merged; save(); render();
           CLOUD.sha=g.sha; saveSyncMeta();
           await cloudPut(merged);
@@ -1043,7 +1077,7 @@ async function syncPull(){                          // 云端 → 本地(启动/
   try{
     var g=await cloudGet();
     if(g){
-      var merged=mergeByTs(g.items, list);
+      var merged=mergeLists(g.items, list);
       var changed=JSON.stringify(merged)!==JSON.stringify(list);
       list=merged; save(); render();
       CLOUD.sha=g.sha; saveSyncMeta();             // 先对齐云端 sha 再写
