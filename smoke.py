@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# 冒烟测试:真实 chromium 跑 存→剪贴板→赛季→选择模式批量删→迁移 全流程
-import json, sys, os
+# 冒烟测试:真实 chromium 跑 存→剪贴板→赛季→选择模式批量删→标签筛选→云同步 全流程
+import json, sys, os, base64, time
 from playwright.sync_api import sync_playwright
 
 URL = os.environ.get("COMPBOX_URL", "file:///home/hkxxzx/comp-box/index.html")
@@ -9,6 +9,15 @@ def check(name, cond):
     global ok, fail
     ok += bool(cond); fail += not bool(cond)
     print(("PASS" if cond else "FAIL") + " | " + name)
+def waitfor(fn, timeout=6, interval=0.1):
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if fn(): return True
+        except Exception:
+            pass
+        time.sleep(interval)
+    return False
 
 with sync_playwright() as pw:
     b = pw.chromium.launch()
@@ -193,7 +202,70 @@ with sync_playwright() as pw:
     check("点标签徽章启用上分筛", pg.locator("li.item").count() == 1 and "上分" in pg.locator("#count").inner_text())
     check("S18+上分 命中裁决", "裁决婕拉" in pg.locator("li.item").inner_text())
 
-    check("无 console 错误", not [e for e in errs if "favicon" not in e])
+    # 12. 云同步(真实本地 HTTP 服务器模拟 GitHub contents API)
+    import http.server, threading
+    GH = {"sha": "sha0", "items": [], "ver": 0, "lock": threading.Lock()}
+    class GHSrv(http.server.BaseHTTPRequestHandler):
+        def _hdr(self, code, ctype="application/json", body=""):
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "*")
+            self.send_header("Access-Control-Allow-Methods", "*")
+            self.end_headers()
+            if body: self.wfile.write(body.encode() if isinstance(body, str) else body)
+        def do_OPTIONS(self): self._hdr(204, "", "")
+        def do_GET(self):
+            with GH["lock"]:
+                doc = {"sha": GH["sha"], "content": base64.b64encode(
+                    json.dumps({"v": 1, "items": GH["items"]}, ensure_ascii=False).encode()).decode()}
+            self._hdr(200, body=json.dumps(doc))
+        def do_PUT(self):
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode() or "{}")
+            with GH["lock"]:
+                if body.get("sha") and body["sha"] != GH["sha"]:
+                    self._hdr(409, body='{"message":"conflict"}'); return
+                items = json.loads(base64.b64decode(body["content"]).decode())["items"]
+                GH["items"] = items; GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])
+            self._hdr(200, body=json.dumps({"content": {"sha": GH["sha"]}}))
+        def log_message(self, *a): pass
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GHSrv)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    api_base = f"http://127.0.0.1:{srv.server_address[1]}/"
+    # 干净起步:本地空 + 注入 token + API 指向本地服务器 → 启动自动拉取
+    pg.evaluate(f"localStorage.clear(); localStorage.setItem('ccToken','mocktoken0123456789abcdef'); localStorage.setItem('ccApiBase','{api_base}');")
+    pg.reload()
+    check("同步按钮显示", waitfor(lambda: pg.locator("#sync-btn.ok").count() == 1))
+    # 12a. 保存 → 自动推云端
+    pg.click("#fab"); pg.fill("#raw", "【云端一号】" + CODE); pg.click("#btn-save")
+    check("保存自动上云", waitfor(lambda: len(GH["items"]) == 1 and GH["items"][0]["name"] == "云端一号"))
+    # 12b. 别端新增(模拟我电脑端 git 提交)→ 手动同步拉取合并
+    GH["items"].append({"id": "remote1", "code": CODE2, "name": "电脑端阵容", "tag": "上分", "season": "S18", "ts": int(time.time() * 1000) + 1})
+    GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])
+    pg.click("#sync-btn")
+    check("拉取别端新增", waitfor(lambda: "电脑端阵容" in pg.locator("#list").inner_text()))
+    check("合并后仍保留本端", pg.locator("li.item").count() == 2)
+    # 12c. 删除 → 传播到云端
+    li12 = pg.locator("li.item", has_text="云端一号")
+    bx = li12.bounding_box()
+    pg.mouse.move(bx["x"] + bx["width"] * 0.7, bx["y"] + bx["height"] / 2)
+    pg.mouse.down(); pg.mouse.move(bx["x"] + bx["width"] * 0.7 - 140, bx["y"] + bx["height"] / 2, steps=6); pg.mouse.up()
+    pg.wait_for_timeout(300)
+    li12.locator(".swipe-del").click()
+    pg.locator("#cf-ok").click()
+    check("删除传播到云端", waitfor(lambda: len(GH["items"]) == 1 and GH["items"][0]["id"] == "remote1"))
+    # 12d. 409 冲突:别端在本地不知情时改云 → 本地保存触发冲突 → 自动合并两端新增
+    GH["items"].append({"id": "remote2", "code": CODE, "name": "别端新阵容", "tag": "", "season": "S18", "ts": int(time.time() * 1000) + 2})
+    GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])   # 本地 sync meta 的 sha 已过期
+    pg.click("#fab"); pg.fill("#raw", "【本地新阵容】" + CODE2); pg.click("#btn-save")
+    check("冲突自动合并(云端含两端新增)", waitfor(lambda: len(GH["items"]) == 3 and
+        any(x["name"] == "别端新阵容" for x in GH["items"]) and any(x["name"] == "本地新阵容" for x in GH["items"])))
+    check("合并后本地 3 条", pg.locator("li.item").count() == 3)
+    check("同步按钮回到绿色", waitfor(lambda: pg.locator("#sync-btn.ok").count() == 1))
+    srv.shutdown()
+    pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
+
+    check("无 console 错误", not [e for e in errs if "favicon" not in e and "409" not in e])
     b.close()
 
 print(f"\n{ok} passed, {fail} failed")

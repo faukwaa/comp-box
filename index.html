@@ -42,6 +42,15 @@
   }
   .text-btn:active{background:var(--sel-bg)}
   .text-btn.primary{font-weight:600}
+  /* 同步按钮 */
+  #sync-btn{display:none; font-size:17px; padding:6px 8px; color:var(--sub)}
+  #sync-btn.ok, #sync-btn.err, #sync-btn.syncing{display:block}
+  #sync-btn.ok{color:#30b158}
+  #sync-btn.err{color:var(--red)}
+  #sync-btn.syncing{color:var(--sub)}
+  #sync-btn.syncing svg{animation:spin 1.1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){#sync-btn.syncing svg{animation:none}}
   /* ---------- 搜索 & 赛季 ---------- */
   #search{
     display:block; width:calc(100% - 32px); margin:8px 16px 0;
@@ -219,6 +228,7 @@
   <h1>阵容码盒</h1>
   <span id="count"></span>
   <div id="header-right">
+    <button class="text-btn" id="sync-btn" title="云端同步状态,点按手动同步"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
     <button class="text-btn" id="select-btn" hidden>选择</button>
   </div>
 </header>
@@ -458,10 +468,12 @@ function confirmDelete(){
   if(!pendingDeleteIds) return;
   var n=pendingDeleteIds.length;
   list=list.filter(function(it){ return pendingDeleteIds.indexOf(it.id)<0; });
+  for(var i=0;i<pendingDeleteIds.length;i++) if(tombstones.indexOf(pendingDeleteIds[i])<0) tombstones.push(pendingDeleteIds[i]);
   pendingDeleteIds=null; selected={};
-  save(); toast("已删除 "+n+" 套");
+  save(); rememberTombstones(); toast("已删除 "+n+" 套");
   if(!list.length) exitSelect(); else render();
   closeConfirm();
+  if(cloudOn()) syncPush();                         // 墓碑随本次推送一并剔除云端
 }
 function closeConfirm(){ document.getElementById("confirm-sheet").classList.remove("open"); }
 
@@ -637,6 +649,7 @@ document.getElementById("btn-save").addEventListener("click",function(){
   list.push(makeItem(code, nm||r.name||"(未命名)", tag, season));
   save(); render(); toast("已存入");
   closeSheet();
+  if(cloudOn()) syncPush();
 });
 document.getElementById("btn-export").addEventListener("click",function(){
   var blob=new Blob([JSON.stringify(list,null,1)],{type:"application/json"});
@@ -661,6 +674,7 @@ document.getElementById("file").addEventListener("change",function(){
       if(!arr.length){ toast("文件里没有阵容码"); return; }
       if(confirm("导入 "+arr.length+" 套？将追加到现有列表")){
         list=list.concat(arr); save(); render(); toast("导入成功");
+        if(cloudOn()) syncPush();
       }
     }catch(e){ toast("文件格式不对"); }
   };
@@ -668,8 +682,141 @@ document.getElementById("file").addEventListener("change",function(){
   this.value="";
 });
 
+/* ---------- 云同步(GitHub Contents API) ----------
+   权威数据存私有仓 comp-box-data/data.json;localStorage 是离线缓存。
+   sha 条件写入防并发;409 冲突→重拉按 ts 合并;删除靠本地墓碑剔除传播。 */
+var CLOUD={
+  repo:"faukwaa/comp-box-data", file:"data.json",
+  apiBase:(function(){ try{ return localStorage.getItem("ccApiBase")||"https://api.github.com/repos/"; }catch(e){ return "https://api.github.com/repos/"; } })(),
+  token:(function(){ try{ return localStorage.getItem("ccToken")||""; }catch(e){ return ""; } })(),
+  sha:null, state:"off"
+};
+var SYNCS_KEY="jccCompCodes.sync";
+var tombstones=[];
+function cloudOn(){ return CLOUD.token.length>20; }
+function b64encode(str){
+  var bytes=new TextEncoder().encode(str), bin="";
+  for(var i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64decode(b64){
+  var bin=atob(b64), bytes=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function loadSyncMeta(){
+  try{
+    var s=JSON.parse(localStorage.getItem(SYNCS_KEY)||"null");
+    if(s){ CLOUD.sha=s.sha||null; tombstones=(s.tomb||[]).slice(); }
+  }catch(e){}
+}
+function saveSyncMeta(){
+  try{ localStorage.setItem(SYNCS_KEY, JSON.stringify({sha:CLOUD.sha, tomb:tombstones, at:Date.now()})); }catch(e){}
+}
+function ghReq(method, bodyObj){
+  var ctrl=(typeof AbortController!=="undefined")? new AbortController() : null;
+  var to=ctrl? setTimeout(function(){ ctrl.abort(); }, 15000) : null;   // 网络兜底,绝不无限挂起
+  return fetch(CLOUD.apiBase+CLOUD.repo+"/contents/"+CLOUD.file, {
+    method:method,
+    headers:{ "Authorization":"Bearer "+CLOUD.token, "Accept":"application/vnd.github+json" },
+    body: bodyObj? JSON.stringify(bodyObj) : undefined,
+    signal: ctrl? ctrl.signal : undefined
+  }).then(function(r){ if(to) clearTimeout(to); return r; },
+          function(e){ if(to) clearTimeout(to); throw e; });
+}
+async function cloudGet(){
+  var r=await ghReq("GET");
+  if(r.status===404) return null;                 // 云端还没有文件
+  if(!r.ok) throw new Error("cloud GET "+r.status);
+  var d=await r.json();
+  var doc=JSON.parse(b64decode(d.content)||"{}");
+  return {sha:d.sha, items:Array.isArray(doc.items)? doc.items: []};
+}
+async function cloudPut(items){
+  var body={ message:"sync "+new Date().toISOString().slice(0,16),
+             content:b64encode(JSON.stringify({v:1, items:items})) };
+  if(CLOUD.sha) body.sha=CLOUD.sha;
+  var r=await ghReq("PUT", body);
+  if(r.status===409){ var e=new Error("conflict"); e.conflict=true; throw e; }
+  if(!r.ok) throw new Error("cloud PUT "+r.status);
+  var d=await r.json();
+  CLOUD.sha=d.content.sha;                        // 记新 sha,后续条件写入
+  saveSyncMeta();
+}
+// 合并:同 id 取 ts 较新者;云端被本端墓碑剔除;本地独有=新增上传;云端独有=下载
+function mergeByTs(cloudItems, localItems){
+  var map={};
+  cloudItems.concat(localItems).forEach(function(it){
+    var ex=map[it.id];
+    if(!ex||(it.ts||0)>(ex.ts||0)) map[it.id]=it;
+  });
+  var out=[];
+  Object.keys(map).forEach(function(id){
+    if(tombstones.indexOf(id)<0) out.push(map[id]);
+  });
+  return out;
+}
+function setSyncUI(mode, label){
+  var b=document.getElementById("sync-btn");
+  b.className="text-btn "+mode;
+  if(label) b.title=label;
+}
+async function syncPush(){                          // 本地改动 → 云端
+  if(!cloudOn()) return;
+  setSyncUI("syncing","同步中…");
+  try{
+    await cloudPut(list);
+    CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
+    setSyncUI("ok","已同步 "+(new Date()).toLocaleTimeString());
+  }catch(e){
+    if(e.conflict){                                 // sha 过期:重拉合并后再推
+      try{
+        var g=await cloudGet();
+        if(!g){ await cloudPut(list); }
+        else{
+          var merged=mergeByTs(g.items, list);
+          list=merged; save(); render();
+          CLOUD.sha=g.sha; saveSyncMeta();
+          await cloudPut(merged);
+        }
+        CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
+        setSyncUI("ok","已同步");
+        return;
+      }catch(e2){ CLOUD.state="err"; setSyncUI("err","冲突合并失败"); if(window.console) console.error("merge fail", e2); }
+    }
+    CLOUD.state="err"; setSyncUI("err","离线:改动已存本机,联网后自动同步");
+  }
+}
+async function syncPull(){                          // 云端 → 本地(启动/手动)
+  if(!cloudOn()) return;
+  setSyncUI("syncing","同步中…");
+  try{
+    var g=await cloudGet();
+    if(g){
+      var merged=mergeByTs(g.items, list);
+      var changed=JSON.stringify(merged)!==JSON.stringify(list);
+      list=merged; save(); render();
+      CLOUD.sha=g.sha; saveSyncMeta();             // 先对齐云端 sha 再写
+      if(changed){ await cloudPut(merged); }        // 本端新增/删除一并上云
+      CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
+      setSyncUI("ok","已同步 "+(new Date()).toLocaleTimeString());
+    }
+  }catch(e){
+    CLOUD.state="err"; setSyncUI("err","同步失败,稍后重试");
+  }
+}
+function rememberTombstones(){                      // 删除记账(离线也能传播删除)
+  saveSyncMeta();
+}
+document.getElementById("sync-btn").addEventListener("click",function(){ syncPull(); });
+
 /* ---------- init ---------- */
 load(); render();
+if(cloudOn()){
+  loadSyncMeta();
+  document.getElementById("sync-btn").className="text-btn syncing";
+  syncPull();                                       // 启动自动拉取合并
+}
 window.__extract=extract; // 供 node 单测
 })();
 </script>
