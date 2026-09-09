@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f2f2f7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
 <link rel="icon" type="image/png" href="emblem-64.png?v=2">
 <link rel="apple-touch-icon" href="emblem-180.png?v=2">
 <title>阵容码盒</title>
@@ -119,7 +120,7 @@
   }
   body.select-mode .check{display:flex}
   body.select-mode .swipe-content{padding-right:6px}
-  .item.sel .check{background:var(--ink); border-color:var(--ink)}
+  .item.sel .check{background:var(--ink); border-color:var(--ink); color:#fff}
   .item.sel{background:#ececf0}
   .check svg{display:none}
   .item.sel .check svg{display:block}
@@ -290,6 +291,33 @@
   @media (prefers-reduced-motion: reduce){
     .panel, #confirm-sheet .confirm-card{animation:none}
   }
+  /* ---------- 暗色模式(跟随系统) ---------- */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#000000; --card:#1c1c1e; --ink:#f2f2f7; --sub:#98989f;
+      --accent-ink:#e8c06a; --line:rgba(255,255,255,.12);
+      --red:#ff453a; --sel-bg:#2c2c2e;
+    }
+    header{background:rgba(16,16,18,.82)}
+    #search, .chip{background:#2c2c2e}
+    #search::placeholder{color:#6e6e73}
+    #search-clear{background:rgba(120,120,128,.4); color:#fff}
+    /* 反相主按钮:白底黑字 */
+    .chip.on, .chip.tag-chip.on, #fab, .btn.primary{background:#fff; color:#000}
+    .check{border-color:#48484a}
+    .item.sel{background:#2c2c2e}
+    .item.sel .check{color:#000}
+    .item{box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+    .fav-btn{color:#636366}
+    .grab{background:#48484a}
+    textarea, input[type=text], .paste-btn, .btn.ghost, .btn.danger-outline, #confirm-sheet .confirm-card{background:#2c2c2e}
+    .paste-btn:active, .btn.ghost:active{background:#3a3a3c}
+    .btn.danger-outline:active{background:rgba(255,69,58,.28)}
+    input:focus, textarea:focus{background:#3a3a3c; box-shadow:0 0 0 3px rgba(255,255,255,.18)}
+    .swipe-edit{background:#636366}
+    #select-bar{background:rgba(44,44,46,.94); border:1px solid rgba(255,255,255,.12)}
+    .tag.season{background:#48484a}
+  }
 </style>
 </head>
 <body>
@@ -432,7 +460,7 @@ function save(){ localStorage.setItem(KEY, JSON.stringify(list)); }
 
 /* ---------- 渲染 ---------- */
 function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
-var CHECK_SVG='<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var CHECK_SVG='<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function tagHtml(t){ return t? '<span class="tag">'+esc(t)+'</span>' : ''; }
 function seasonHtml(s){ return s? '<span class="tag season">'+esc(s)+'</span>' : ''; }
 function refreshSeasonChips(){

@@ -329,6 +329,20 @@ with sync_playwright() as pw:
     pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
 
     check("无 console 错误", not [e for e in errs if "favicon" not in e and "409" not in e])
+
+    # 13. 暗色模式(跟随系统)
+    ctxD = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="dark")
+    pgD = ctxD.new_page()
+    pgD.goto(URL)
+    pgD.evaluate("localStorage.clear()"); pgD.reload()
+    check("暗色背景纯黑", pgD.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 0, 0)")
+    pgD.click("#fab"); pgD.fill("#raw", "【暗色测试】" + CODE); pgD.click("#btn-save")
+    check("暗色卡片深灰", waitfor(lambda: pgD.evaluate("getComputedStyle(document.querySelector('li.item')).backgroundColor") == "rgb(28, 28, 30)"))
+    fab = pgD.evaluate("""() => { const s = getComputedStyle(document.getElementById('fab')); return s.backgroundColor + '|' + s.color; }""")
+    check("暗色主按钮反相(白底黑字)", fab == "rgb(255, 255, 255)|rgb(0, 0, 0)")
+    chipOn = pgD.evaluate("""() => { const c = document.querySelector('#seasons .chip.on'); return c ? getComputedStyle(c).backgroundColor + '|' + getComputedStyle(c).color : 'none'; }""")
+    check("暗色选中chip白底黑字", chipOn == "rgb(255, 255, 255)|rgb(0, 0, 0)")
+    ctxD.close()
     b.close()
 
 print(f"\n{ok} passed, {fail} failed")
