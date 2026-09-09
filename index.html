@@ -11,7 +11,7 @@
 <title>阵容码盒</title>
 <style>
   :root{
-    --bg:#f2f2f7; --card:#ffffff; --ink:#1c1c1e; --sub:#8e8e93;
+    --bg:#f2f2f7; --card:#ffffff; --ink:#1c1c1e; --sub:#6e6e73;
     --accent:#d9a441; --accent-ink:#7a5c14; --line:rgba(60,60,67,.08);
     --red:#ff3b30; --sel-bg:#e9e9eb;
   }
@@ -127,13 +127,16 @@
   .ic-main{flex:1; min-width:0}
   /* 收藏星标(常驻,点星=收藏;其它区域=复制) */
   .fav-btn{
-    flex-shrink:0; width:34px; height:34px; border:none; background:none; cursor:pointer;
-    font-size:19px; line-height:1; color:#c7c7cc; padding:0; border-radius:10px;
+    flex-shrink:0; width:40px; height:40px; border:none; background:none; cursor:pointer;
+    font-size:20px; line-height:1; color:#c7c7cc; padding:0; border-radius:11px;
     display:flex; align-items:center; justify-content:center;
   }
   .fav-btn:active{background:var(--sel-bg)}
   .fav-btn.on{color:#f4c550; text-shadow:0 1px 2px rgba(200,150,20,.35)}
   .fav-star{color:#f4c550; font-size:13px; margin-right:2px}
+  /* 删除行淡出动画(确认后执行) */
+  @keyframes removeItem{from{opacity:1} 60%{opacity:0} to{opacity:0; transform:translateX(-20px)}}
+  li.item.removing{animation:removeItem .26s ease forwards; pointer-events:none}
   .item-row{display:flex; align-items:center; gap:8px; min-width:0}
   .item-name{font-size:16px; font-weight:650; letter-spacing:-.01em; word-break:break-all}
   .tag{
@@ -544,6 +547,7 @@ function selectAllToggle(){
 var pendingDeleteIds=null;
 function requestDelete(ids){
   if(!ids||!ids.length) return;
+  closeSwipes();                                  // 删除前收起滑开行
   pendingDeleteIds=ids;
   var msg;
   if(ids.length===list.length){
@@ -564,13 +568,22 @@ function requestDelete(ids){
 function confirmDelete(){
   if(!pendingDeleteIds) return;
   var n=pendingDeleteIds.length;
-  list=list.filter(function(it){ return pendingDeleteIds.indexOf(it.id)<0; });
-  for(var i=0;i<pendingDeleteIds.length;i++) if(tombstones.indexOf(pendingDeleteIds[i])<0) tombstones.push(pendingDeleteIds[i]);
-  pendingDeleteIds=null; selected={};
-  save(); rememberTombstones(); toast("已删除 "+n+" 套");
-  if(!list.length) exitSelect(); else render();
+  // 先给可见的待删行播淡出动画,动画后执行删除
+  var rows=[].slice.call(document.querySelectorAll("li.item"));
+  var animated=0;
+  rows.forEach(function(li){
+    if(pendingDeleteIds.indexOf(li.dataset.id)>-1){ li.classList.add("removing"); animated++; }
+  });
   closeConfirm();
-  if(cloudOn()) syncPush();                         // 墓碑随本次推送一并剔除云端
+  var doDelete=function(){
+    list=list.filter(function(it){ return pendingDeleteIds.indexOf(it.id)<0; });
+    for(var i=0;i<pendingDeleteIds.length;i++) if(tombstones.indexOf(pendingDeleteIds[i])<0) tombstones.push(pendingDeleteIds[i]);
+    pendingDeleteIds=null; selected={};
+    save(); rememberTombstones(); toast("已删除 "+n+" 套");
+    if(!list.length) exitSelect(); else render();
+    if(cloudOn()) syncPush();                     // 墓碑随本次推送一并剔除云端
+  };
+  if(animated){ setTimeout(doDelete, 290); } else { doDelete(); }
 }
 var dismissTimers={};
 function cancelDismiss(el){ clearTimeout(dismissTimers[el.id]); el.classList.remove("closing"); }

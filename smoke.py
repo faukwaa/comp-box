@@ -130,7 +130,7 @@ with sync_playwright() as pw:
     li.locator(".swipe-del").click()
     check("单删确认文案含名字", "删除「星神」" in pg.locator("#confirm-msg").inner_text())
     pg.locator("#cf-ok").click()
-    check("滑动删除后剩2", pg.locator("li.item").count() == 2)
+    check("滑动删除后剩2", waitfor(lambda: pg.locator("li.item").count() == 2))
     check("确认删除后滑条收起", pg.locator("li.item.open").count() == 0)
 
     # 6. 筛选记忆
@@ -155,7 +155,7 @@ with sync_playwright() as pw:
     check("确认弹层出现", pg.locator("#confirm-sheet.open").count() == 1)
     check("确认文案含名字", "删除「福星临门」" in pg.locator("#confirm-msg").inner_text())
     pg.locator("#cf-ok").click()
-    check("确认删除后剩1", pg.locator("li.item").count() == 1)
+    check("确认删除后剩1", waitfor(lambda: pg.locator("li.item").count() == 1))
     check("仍在选择模式(未删光)", pg.evaluate("document.body.classList.contains('select-mode')"))
     check("删除后计数复位", "选择阵容" in pg.locator("#count").inner_text())
 
@@ -173,7 +173,7 @@ with sync_playwright() as pw:
     pg.locator("#sb-delete").click()
     check("确认文案-全部", "删除 全部阵容" in pg.locator("#confirm-msg").inner_text())
     pg.locator("#cf-ok").click()
-    check("删光列表空", pg.locator("li.item").count() == 0)
+    check("删光列表空", waitfor(lambda: pg.locator("li.item").count() == 0))
     check("删光自动退出选择", not pg.evaluate("document.body.classList.contains('select-mode')"))
     check("退出后选择按钮回文案", pg.locator("#select-btn").inner_text() == "选择")
     check("退出后 FAB 可见", pg.locator("#fab").is_visible())
