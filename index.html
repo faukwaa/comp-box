@@ -5,126 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#f5f5f7">
+<meta name="theme-color" content="#f2f2f7">
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
 <title>阵容码盒</title>
 <style>
   :root{
-    --bg:#f5f5f7; --card:#fff; --ink:#1d1d1f; --sub:#86868b;
-    --accent:#d9a441; --accent-ink:#7a5c14; --line:#e5e5ea;
-    --danger:#ff3b30; --ok:#34c759;
+    --bg:#f2f2f7; --card:#ffffff; --ink:#1c1c1e; --sub:#8e8e93;
+    --accent:#d9a441; --accent-ink:#7a5c14; --line:rgba(60,60,67,.08);
+    --blue:#007aff; --red:#ff3b30; --sel-bg:#e9e9eb;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0}
   html{height:100%}
   body{
     background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
-    font-size:16px; line-height:1.5;
-    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 96px);
+    font-size:16px; line-height:1.45;
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 130px);
     max-width:640px; margin:0 auto; min-height:100%;
   }
-  header{display:flex; align-items:center; gap:10px; padding:20px 16px 8px}
-  header img{width:34px; height:34px; border-radius:9px; box-shadow:0 1px 4px rgba(0,0,0,.12)}
-  h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
-  #count{color:var(--sub); font-size:13px; font-weight:500}
-  #search{
-    display:block; width:calc(100% - 32px); margin:8px 16px 4px;
-    padding:11px 40px 11px 14px; border:none; border-radius:12px;
-    background:#fff; color:var(--ink); font-size:16px;
-    box-shadow:0 1px 2px rgba(0,0,0,.04);
-    outline:none;
+  /* ---------- 顶栏 ---------- */
+  header{
+    display:flex; align-items:center; gap:10px;
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 6px;
+    position:sticky; top:0; z-index:5; background:rgba(242,242,247,.92);
+    -webkit-backdrop-filter:blur(18px) saturate(180%); backdrop-filter:blur(18px) saturate(180%);
   }
-  #search:focus{box-shadow:0 0 0 3px rgba(217,164,65,.35)}
-  /* 赛季筛选 chips */
-  .chips{display:flex; gap:8px; padding:8px 16px 0; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  header img{width:32px; height:32px; border-radius:8px}
+  h1{font-size:24px; font-weight:800; letter-spacing:-.02em}
+  #count{color:var(--sub); font-size:12px; font-weight:500; margin-left:-2px}
+  #header-right{margin-left:auto; display:flex; align-items:center; gap:6px}
+  .text-btn{
+    border:none; background:transparent; font-size:16px; font-weight:500;
+    color:var(--blue); padding:6px 10px; cursor:pointer; border-radius:8px;
+    -webkit-touch-callout:none;
+  }
+  .text-btn:active{background:var(--sel-bg)}
+  .text-btn.primary{font-weight:600}
+  /* ---------- 搜索 & 赛季 ---------- */
+  #search{
+    display:block; width:calc(100% - 32px); margin:8px 16px 0;
+    padding:11px 16px; border:none; border-radius:12px;
+    background:#e4e4e9; color:var(--ink); font-size:16px; outline:none;
+    -webkit-appearance:none; appearance:none;
+  }
+  #search::placeholder{color:#98989f}
+  .chips{display:flex; gap:8px; padding:10px 16px 2px; overflow-x:auto; scrollbar-width:none}
   .chips::-webkit-scrollbar{display:none}
-  .chip{border:none; border-radius:999px; padding:7px 15px; font-size:14px; font-weight:600;
-    background:#e8e8ed; color:var(--sub); white-space:nowrap; cursor:pointer; flex-shrink:0}
+  .chip{
+    border:none; border-radius:999px; padding:7px 14px; font-size:13px; font-weight:600;
+    background:#e4e4e9; color:var(--sub); white-space:nowrap; cursor:pointer; flex-shrink:0;
+    transition:background .15s, color .15s;
+  }
   .chip.on{background:var(--ink); color:#fff}
-  .tag.season{color:#fff; background:#3a3a3c}
+  /* ---------- 列表 ---------- */
   #list{list-style:none; margin:10px 0 0; padding:0 16px}
   .item{
-    background:var(--card); border-radius:16px; padding:14px 14px 12px;
-    margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.05);
-    display:flex; gap:10px; align-items:flex-start;
+    background:var(--card); border-radius:14px; margin-bottom:8px;
+    display:flex; align-items:center; gap:12px;
+    box-shadow:0 1px 2px rgba(0,0,0,.03);
+    overflow:hidden;
   }
-  .item-main{flex:1; min-width:0}
-  .item-name{font-size:17px; font-weight:700; word-break:break-all; display:flex; gap:8px; align-items:center}
+  .check{
+    width:24px; height:24px; border-radius:50%; flex-shrink:0;
+    border:1.5px solid #c7c7cc; margin-left:14px;
+    display:none; align-items:center; justify-content:center;
+    transition:background .15s, border-color .15s;
+  }
+  body.select-mode .check{display:flex}
+  body.select-mode .item{padding-right:6px}
+  .item.sel .check{background:var(--blue); border-color:var(--blue)}
+  .check svg{display:none}
+  .item.sel .check svg{display:block}
+  .item-content{flex:1; min-width:0; padding:12px 14px; cursor:pointer}
+  .item-row{display:flex; align-items:center; gap:8px; min-width:0}
+  .item-name{font-size:16px; font-weight:650; letter-spacing:-.01em; word-break:break-all}
   .tag{
     flex-shrink:0; font-size:11px; font-weight:600; color:var(--accent-ink);
-    background:rgba(217,164,65,.14); border-radius:6px; padding:2px 7px;
+    background:rgba(217,164,65,.16); border-radius:6px; padding:2px 7px;
   }
+  .tag.season{color:#fff; background:#3a3a3c}
   .item-code{
     font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:12px; color:var(--sub);
-    margin-top:3px; word-break:break-all; letter-spacing:-.01em;
+    margin-top:5px; letter-spacing:-.02em; word-break:break-all;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
-  .item-actions{display:flex; flex-direction:column; gap:6px; flex-shrink:0}
-  .icon-btn{
-    width:40px; height:40px; border-radius:12px; border:none; cursor:pointer;
-    background:#f2f2f5; color:var(--ink); font-size:18px; display:flex;
-    align-items:center; justify-content:center; line-height:1;
+  .item.dim{opacity:.45}
+  .empty{text-align:center; color:var(--sub); padding:70px 24px; font-size:15px; line-height:1.8}
+  .empty .big{font-size:46px; margin-bottom:12px}
+  /* ---------- 底部:选择操作条 ---------- */
+  #select-bar{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:6;
+    width:calc(100% - 32px); max-width:608px;
+    background:rgba(28,28,30,.92); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    backdrop-filter:blur(20px) saturate(180%); border-radius:999px;
+    padding:7px 8px; display:none; align-items:center; gap:4px;
+    box-shadow:0 10px 34px rgba(0,0,0,.28);
   }
-  .icon-btn.del{color:var(--danger); background:rgba(255,59,48,.08)}
-  .empty{
-    text-align:center; color:var(--sub); padding:64px 24px;
-    font-size:15px;
+  body.select-mode #select-bar{display:flex}
+  #select-bar .sb-btn{
+    flex:1; border:none; background:transparent; color:#fff; font-size:16px;
+    font-weight:500; padding:11px 8px; border-radius:999px; cursor:pointer;
   }
-  .empty .big{font-size:44px; margin-bottom:10px}
-  /* 底部悬浮:新增 */
+  #select-bar .sb-btn:active{background:rgba(255,255,255,.16)}
+  #select-bar .sb-btn.danger{color:var(--red); font-weight:600}
+  #select-bar .sb-btn.danger:disabled{color:rgba(255,59,48,.35)}
+  /* ---------- 底部:常驻 ---------- */
   #fab{
     position:fixed; left:50%; transform:translateX(-50%);
-    bottom:calc(env(safe-area-inset-bottom) + 18px);
+    bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:5;
+    width:calc(100% - 32px); max-width:608px;
     background:var(--ink); color:#fff; border:none; border-radius:999px;
-    padding:16px 30px; font-size:17px; font-weight:700; cursor:pointer;
-    box-shadow:0 8px 24px rgba(0,0,0,.28); display:flex; gap:8px; align-items:center;
-    max-width:calc(100% - 48px); white-space:nowrap;
+    padding:16px; font-size:17px; font-weight:600; cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.2);
   }
-  #fab:active{transform:translateX(-50%) scale(.97)}
+  #fab:active{transform:translateX(-50%) scale(.985)}
+  body.select-mode #fab{display:none}
   .toolbar{
     position:fixed; left:50%; transform:translateX(-50%);
-    bottom:calc(env(safe-area-inset-bottom) + 82px);
-    display:flex; gap:12px; font-size:12px; color:var(--sub);
+    bottom:calc(env(safe-area-inset-bottom) + 78px); z-index:4;
+    display:flex; gap:16px; font-size:12px;
   }
+  body.select-mode .toolbar{display:none}
   .toolbar button{background:none; border:none; color:var(--sub); font-size:13px; cursor:pointer; padding:4px}
-  .toolbar button:active{color:var(--ink)}
-  /* 新增浮层 */
-  #sheet{
+  /* ---------- 弹层 ---------- */
+  #sheet, #confirm-sheet{
     position:fixed; inset:0; z-index:10; display:none;
-    background:rgba(0,0,0,.4); align-items:flex-end; justify-content:center;
+    background:rgba(0,0,0,.35); align-items:flex-end; justify-content:center;
+    -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   }
-  #sheet.open{display:flex}
+  #sheet.open, #confirm-sheet.open{display:flex}
   .panel{
     width:100%; max-width:640px; background:var(--card);
     border-radius:20px 20px 0 0; padding:10px 16px calc(env(safe-area-inset-bottom) + 16px);
+    animation:rise .28s cubic-bezier(.16,1,.3,1);
   }
-  .grab{width:40px; height:5px; border-radius:3px; background:var(--line); margin:6px auto 14px}
-  .panel h2{font-size:18px; font-weight:800; margin-bottom:4px}
-  .panel .hint{font-size:13px; color:var(--sub); margin-bottom:14px}
+  @keyframes rise{from{transform:translateY(40px); opacity:.4} to{transform:none; opacity:1}}
+  .grab{width:40px; height:5px; border-radius:3px; background:#d1d1d6; margin:6px auto 14px}
+  .panel h2{font-size:18px; font-weight:700; margin-bottom:4px}
+  .panel .hint{font-size:13px; color:var(--sub); margin-bottom:12px}
   label{font-size:13px; font-weight:600; color:var(--sub); display:block; margin:12px 0 6px}
   textarea, input[type=text]{
-    width:100%; border:1px solid var(--line); border-radius:12px;
-    padding:12px 14px; font-size:16px; font-family:inherit; background:#fff;
-    outline:none; -webkit-appearance:none;
+    width:100%; border:none; border-radius:12px; background:#f2f2f7;
+    padding:12px 14px; font-size:16px; font-family:inherit; color:var(--ink);
+    outline:none; -webkit-appearance:none; appearance:none;
   }
-  textarea{min-height:96px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px}
-  input:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(217,164,65,.2)}
-  .row{display:flex; gap:10px}
-  .row > *{flex:1}
+  textarea{min-height:92px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px}
+  input:focus, textarea:focus{background:#ececf1; box-shadow:0 0 0 3px rgba(0,122,255,.14)}
   .btn-row{display:flex; gap:10px; margin-top:18px}
   .btn{
-    flex:1; padding:14px; border:none; border-radius:14px; font-size:17px; font-weight:700; cursor:pointer;
+    flex:1; padding:15px; border:none; border-radius:14px; font-size:17px;
+    font-weight:600; cursor:pointer;
   }
   .btn.primary{background:var(--ink); color:#fff}
-  .btn.ghost{background:#f2f2f5; color:var(--ink)}
+  .btn.primary:active{opacity:.85}
+  .btn.ghost{background:#f2f2f7; color:var(--ink)}
+  .btn.ghost:active{background:#e5e5ea}
+  .btn.danger{background:var(--red); color:#fff}
+  .btn.danger:active{opacity:.85}
+  .btn.danger-outline{background:#f2f2f7; color:var(--red)}
+  .btn.danger-outline:active{background:#ffe4e2}
+  /* 删除确认(居中卡片, 非底部) */
+  #confirm-sheet{align-items:center}
+  #confirm-sheet .confirm-card{
+    width:min(560px, calc(100% - 56px)); background:#f2f2f7; border-radius:14px;
+    overflow:hidden; animation:pop .25s cubic-bezier(.16,1,.3,1);
+    text-align:center;
+  }
+  #confirm-sheet .confirm-card .msg{
+    font-size:15px; color:var(--ink); font-weight:600; padding:22px 18px 4px;
+  }
+  #confirm-sheet .confirm-card .desc{font-size:13px; color:var(--sub); padding:4px 18px 16px}
+  #confirm-sheet .confirm-card button{
+    display:block; width:100%; border:none; background:var(--card); font-size:17px;
+    padding:14px; cursor:pointer; border-top:0.5px solid var(--line);
+  }
+  #confirm-sheet .confirm-card button.del{color:var(--red); font-weight:600}
+  #confirm-sheet .confirm-card button:active{background:#f2f2f2}
+  @keyframes pop{from{transform:scale(1.08); opacity:.3} to{transform:none; opacity:1}}
   /* toast */
   #toast{
-    position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 20px); transform:translateX(-50%) translateY(-8px);
-    background:rgba(29,29,31,.92); color:#fff; padding:9px 18px; border-radius:999px;
-    font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:.25s; z-index:20;
-    max-width:80%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 18px); transform:translateX(-50%) translateY(-8px);
+    background:rgba(28,28,30,.9); color:#fff; padding:9px 18px; border-radius:999px;
+    font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:.22s; z-index:20;
+    max-width:82%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion: reduce){
+    .panel, #confirm-sheet .confirm-card{animation:none}
+  }
 </style>
 </head>
 <body>
@@ -132,9 +202,12 @@
   <img src="logo.png" alt="金铲铲之战">
   <h1>阵容码盒</h1>
   <span id="count"></span>
+  <div id="header-right">
+    <button class="text-btn" id="select-btn" hidden>选择</button>
+  </div>
 </header>
 
-<input id="search" type="search" placeholder="🔍 搜阵容名 / 标签 / 码…" autocomplete="off">
+<input id="search" type="search" placeholder="搜阵容名 / 标签 / 码…" autocomplete="off">
 <div class="chips" id="seasons"></div>
 
 <ul id="list"></ul>
@@ -143,18 +216,25 @@
   <div id="empty-text">还没有阵容码<br>点下面「存阵容」把好阵容收进来</div>
 </div>
 
+<!-- 选择模式底部条 -->
+<div id="select-bar">
+  <button class="sb-btn" id="sb-selectall">全选</button>
+  <button class="sb-btn danger" id="sb-delete" disabled>删除</button>
+</div>
+
+<!-- 常态底部 -->
 <div class="toolbar" id="toolbar" hidden>
   <button id="btn-export">导出备份</button>
   <button id="btn-import">导入恢复</button>
   <input type="file" id="file" accept="application/json,.json" hidden>
 </div>
-
 <button id="fab">＋ 存阵容</button>
 
+<!-- 存阵容表单 -->
 <div id="sheet">
   <div class="panel" onclick="event.stopPropagation()">
     <div class="grab"></div>
-    <h2 id="sheet-title">存阵容</h2>
+    <h2>存阵容</h2>
     <p class="hint">从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字</p>
     <label for="raw">粘贴内容</label>
     <textarea id="raw" placeholder="长按粘贴…&#10;例：【福星临门】h5dySUPLXQxxxx…&#10;或纯阵容码"></textarea>
@@ -172,6 +252,16 @@
   </div>
 </div>
 
+<!-- 删除确认 -->
+<div id="confirm-sheet">
+  <div class="confirm-card" onclick="event.stopPropagation()">
+    <div class="msg" id="confirm-msg">删除阵容？</div>
+    <div class="desc" id="confirm-desc">删除后无法恢复</div>
+    <button id="cf-cancel">取消</button>
+    <button class="del" id="cf-ok">删除</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -179,7 +269,8 @@
 "use strict";
 var KEY="jccCompCodes.v1", FILTER_KEY="jccCompCodes.seasonFilter", LAST_SEASON_KEY="jccCompCodes.lastSeason";
 var DEFAULT_SEASON="S18"; // 当前赛季,换季改这里
-var list=[], editingId=null, q="", seasonFilter=null; // null=全部
+var list=[], q="", seasonFilter=null; // null=全部
+var selecting=false, selected={}, selectAllFlag=false;
 
 /* ---------- 纯函数:粘贴解析（node 可测） ---------- */
 // 金铲铲/云顶阵容码:【阵容码】开头的长字母数字串(hex/base64,可能被中文/括号裹着)。挑最长 alnum 串当码,余文当名字。
@@ -221,20 +312,20 @@ function save(){ localStorage.setItem(KEY, JSON.stringify(list)); }
 
 /* ---------- 渲染 ---------- */
 function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+var CHECK_SVG='<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function tagHtml(t){ return t? '<span class="tag">'+esc(t)+'</span>' : ''; }
 function seasonHtml(s){ return s? '<span class="tag season">'+esc(s)+'</span>' : ''; }
 function refreshSeasonChips(){
   var seasons=[], seen={};
   list.forEach(function(it){ var s=it.season||DEFAULT_SEASON; if(!seen[s]){ seen[s]=1; seasons.push(s); } });
   if(seasonFilter&&seasons.indexOf(seasonFilter)<0){ seasonFilter=null; try{localStorage.removeItem(FILTER_KEY);}catch(e){} }
-  seasons.sort().reverse(); // S18 > S17,文本排序对 S 前缀成立
-  var box=document.getElementById("seasons");
+  seasons.sort().reverse();
   var chips=[{v:null,t:"全部"}].concat(seasons.map(function(s){return {v:s,t:s};}));
-  box.innerHTML=chips.map(function(c){
+  document.getElementById("seasons").innerHTML=chips.map(function(c){
     return '<button class="chip'+(seasonFilter===c.v?" on":"")+'" data-season="'+esc(c.v===null?"__ALL__":c.v)+'">'+esc(c.t)+'</button>';
   }).join("");
 }
-function filtered(){
+function visibleRows(){
   var k=(q||"").toLowerCase();
   return list.filter(function(it){
     if(seasonFilter&&it.season!==seasonFilter) return false;
@@ -242,29 +333,81 @@ function filtered(){
     return (it.name+" "+it.tag+" "+it.season+" "+it.code).toLowerCase().indexOf(k)>-1;
   }).sort(function(a,b){return b.ts-a.ts;});
 }
+function updateSelectUI(){
+  var n=list.length, sn=Object.keys(selected).length;
+  document.getElementById("count").textContent=selecting?
+    (sn? "已选 "+sn+" 项" : "选择阵容") :
+    (n? n+" 套"+(seasonFilter?" · "+seasonFilter:"")+(q&&visibleRows().length!==n?" · 命中 "+visibleRows().length:""):"");
+  document.getElementById("sb-delete").textContent=sn? "删除("+sn+")" : "删除";
+  document.getElementById("sb-delete").disabled=!sn;
+  var visible=visibleRows().length;
+  document.getElementById("sb-selectall").textContent=
+    (visible&&Object.keys(selected).length===visible)&&visible>0 ? "取消全选" : "全选";
+  document.getElementById("empty-text").innerHTML=list.length?
+    "没有匹配「"+esc(q||seasonFilter||"")+"」的阵容" :
+    "还没有阵容码<br>点下面「存阵容」把好阵容收进来";
+}
 function render(){
-  var rows=filtered();
+  var rows=visibleRows();
   refreshSeasonChips();
-  document.getElementById("count").textContent=list.length? (list.length+" 套"+(seasonFilter?" · "+seasonFilter:"")+(q&&rows.length!==list.length?" · 命中 "+rows.length:"")) : "";
   var ul=document.getElementById("list");
   ul.innerHTML=rows.map(function(it){
-    return '<li class="item" data-id="'+it.id+'">'+
-      '<div class="item-main">'+
-        '<div class="item-name">'+seasonHtml(it.season)+esc(it.name)+tagHtml(it.tag)+'</div>'+
+    var sel=selected[it.id]?true:false;
+    return '<li class="item'+(sel?" sel":"")+(selecting?" dim":"")+'" data-id="'+it.id+'">'+
+      '<span class="check">'+CHECK_SVG+'</span>'+
+      '<div class="item-content" data-id="'+it.id+'">'+
+        '<div class="item-row">'+seasonHtml(it.season)+'<span class="item-name">'+esc(it.name)+'</span>'+tagHtml(it.tag)+'</div>'+
         '<div class="item-code">'+esc(it.code)+'</div>'+
-      '</div>'+
-      '<div class="item-actions">'+
-        '<button class="icon-btn copy" title="复制码">⧉</button>'+
-        '<button class="icon-btn del" title="删除">🗑</button>'+
       '</div></li>';
   }).join("");
   var empty=document.getElementById("empty");
   empty.hidden=rows.length>0;
-  document.getElementById("empty-text").innerHTML=list.length?
-    "没有匹配「"+esc(q||seasonFilter||"")+"」的阵容" :
-    "还没有阵容码<br>点下面「存阵容」把好阵容收进来";
   document.getElementById("toolbar").hidden=list.length<1;
+  document.getElementById("select-btn").hidden=list.length<1;
+  updateSelectUI();
 }
+
+/* ---------- 选择模式 ---------- */
+function enterSelect(){
+  selecting=true; selected={};
+  document.body.classList.add("select-mode");
+  document.getElementById("select-btn").textContent="完成";
+  render();
+}
+function exitSelect(){
+  selecting=false; selected={};
+  document.body.classList.remove("select-mode");
+  document.getElementById("select-btn").textContent="选择";
+  render();
+}
+function toggleSelect(id){
+  if(selected[id]) delete selected[id]; else selected[id]=1;
+  var li=document.querySelector('li.item[data-id="'+id+'"]');
+  if(li) li.classList.toggle("sel", !!selected[id]);
+  updateSelectUI();
+}
+function selectAllToggle(){
+  var rows=visibleRows();
+  var all=rows.length&&rows.every(function(it){return selected[it.id];});
+  selected={};
+  if(!all) rows.forEach(function(it){ selected[it.id]=1; });
+  render();
+}
+function delConfirmed(){
+  var ids=Object.keys(selected);
+  list=list.filter(function(it){ return selected[it.id]? false: true; });
+  selected={};
+  save(); toast("已删除 "+ids.length+" 套");
+  if(!list.length) exitSelect(); else render();
+  closeConfirm();
+}
+function askDelete(){
+  var sn=Object.keys(selected).length; if(!sn) return;
+  document.getElementById("confirm-msg").textContent="删除 "+(sn===list.length?"全部":sn+" 套")+"阵容？";
+  document.getElementById("confirm-desc").textContent="删除后无法恢复";
+  document.getElementById("confirm-sheet").classList.add("open");
+}
+function closeConfirm(){ document.getElementById("confirm-sheet").classList.remove("open"); }
 
 /* ---------- 动作 ---------- */
 function toast(msg){
@@ -276,20 +419,12 @@ function copyText(s){
   if(navigator.clipboard&&navigator.clipboard.writeText){
     return navigator.clipboard.writeText(s).then(function(){return true;},function(){return false;});
   }
-  // fallback: 隐藏 textarea 选中复制(处理 clipboard 权限拒绝)
   var ta=document.createElement("textarea");
   ta.value=s; ta.style.cssText="position:fixed;opacity:0";
   document.body.appendChild(ta); ta.focus(); ta.select();
   try{ document.execCommand("copy"); }catch(e){}
   document.body.removeChild(ta);
   return Promise.resolve(true);
-}
-function del(id){
-  var it=list.filter(function(x){return x.id===id;})[0];
-  if(!it) return;
-  if(!confirm("删除「"+it.name+"」？")) return;
-  list=list.filter(function(x){return x.id!==id;});
-  save(); render(); toast("已删除");
 }
 function lastSeason(){
   try{ return localStorage.getItem(LAST_SEASON_KEY)||DEFAULT_SEASON; }catch(e){ return DEFAULT_SEASON; }
@@ -301,32 +436,30 @@ function refreshSeasonSuggest(){
   box.innerHTML=opts.map(function(s){ return '<option value="'+esc(s)+'">'; }).join("");
 }
 function openSheet(){
-  editingId=null;
   document.getElementById("raw").value="";
   document.getElementById("name").value="";
   document.getElementById("tag").value="";
   document.getElementById("season").value=lastSeason();
   refreshSeasonSuggest();
-  document.getElementById("sheet-title").textContent="存阵容";
   document.getElementById("sheet").classList.add("open");
   tryReadClipboard(); // 点按钮=用户手势,Safari 允许读剪贴板(首次弹权限)
   document.getElementById("raw").focus();
 }
 function tryReadClipboard(){
-  if(!navigator.clipboard||!navigator.clipboard.readText) return; // 老浏览器不支持
+  if(!navigator.clipboard||!navigator.clipboard.readText) return;
   navigator.clipboard.readText().then(function(t){
     if(!document.getElementById("sheet").classList.contains("open")) return; // 已关闭则弃
     t=(t||"").trim();
-    if(!t) return;                      // 剪贴板空
+    if(!t) return;
     var ta=document.getElementById("raw");
     if(ta.value&&ta.value!==t) return;  // 用户已手动输入/粘贴,别覆盖
     var r=extract(t);
-    if(!r.code) return;                 // 不是阵容码(如刚复制的密码),别碰
+    if(!r.code) return;
     ta.value=t;
     var nm=document.getElementById("name");
     if(!nm.dataset.touched&&!nm.value) nm.value=r.name;
     toast("已从剪贴板读取");
-  },function(){ /* 权限被拒:静默,用户可长按手动粘贴 */ });
+  },function(){ /* 权限被拒:静默 */ });
 }
 function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
 
@@ -334,6 +467,12 @@ function closeSheet(){ document.getElementById("sheet").classList.remove("open")
 document.getElementById("fab").addEventListener("click",openSheet);
 document.getElementById("btn-cancel").addEventListener("click",closeSheet);
 document.getElementById("sheet").addEventListener("click",closeSheet);
+document.getElementById("select-btn").addEventListener("click",function(){ selecting? exitSelect() : enterSelect(); });
+document.getElementById("sb-delete").addEventListener("click",askDelete);
+document.getElementById("sb-selectall").addEventListener("click",selectAllToggle);
+document.getElementById("cf-ok").addEventListener("click",delConfirmed);
+document.getElementById("cf-cancel").addEventListener("click",closeConfirm);
+document.getElementById("confirm-sheet").addEventListener("click",closeConfirm);
 document.getElementById("search").addEventListener("input",function(){ q=this.value; render(); });
 document.getElementById("seasons").addEventListener("click",function(ev){
   var chip=ev.target.closest(".chip"); if(!chip) return;
@@ -342,13 +481,22 @@ document.getElementById("seasons").addEventListener("click",function(ev){
   try{ seasonFilter? localStorage.setItem(FILTER_KEY,seasonFilter) : localStorage.removeItem(FILTER_KEY); }catch(e){}
   render();
 });
+document.getElementById("list").addEventListener("click",function(ev){
+  var content=ev.target.closest(".item-content");
+  var li=ev.target.closest("li.item");
+  if(!content||!li) return;
+  var id=li.dataset.id;
+  if(selecting){ toggleSelect(id); return; }
+  // 常态:点整行=复制码(最高频动作)
+  var it=list.filter(function(x){return x.id===id;})[0];
+  if(!it) return;
+  copyText(it.code).then(function(ok){ toast(ok? "已复制 · "+it.name : "复制失败，请重试"); });
+});
 document.getElementById("raw").addEventListener("input",function(){
-  // 粘贴后自动带出名字,仅在名字还没手填时生效
   var nm=document.getElementById("name");
   if(nm.dataset.touched) return;
   var r=extract(this.value);
   if(r.code&&!nm.value) nm.value=r.name;
-  if(r.code&&!nm.value&&r.rest) nm.value=r.name;
 });
 document.getElementById("name").addEventListener("input",function(){ this.dataset.touched="1"; });
 document.getElementById("btn-save").addEventListener("click",function(){
@@ -360,27 +508,9 @@ document.getElementById("btn-save").addEventListener("click",function(){
   if(!r.code){ toast("没认到阵容码，请检查粘贴内容"); return; }
   var code=r.code;
   try{ localStorage.setItem(LAST_SEASON_KEY, season); }catch(e){}
-  if(editingId){
-    var it=list.filter(function(x){return x.id===editingId;})[0];
-    if(!it) return;
-    it.code=code; it.name=nm||r.name||it.name; it.tag=tag; it.season=season; it.ts=Date.now();
-    toast("已更新");
-  }else{
-    list.push(makeItem(code, nm||r.name||"(未命名)", tag, season));
-    toast("已存入");
-  }
-  save(); render(); closeSheet();
-});
-document.getElementById("list").addEventListener("click",function(ev){
-  var btn=ev.target.closest("button"); if(!btn) return;
-  var li=ev.target.closest("li.item"); if(!li) return;
-  var id=li.dataset.id;
-  if(btn.classList.contains("del")) return del(id);
-  if(btn.classList.contains("copy")){
-    var it=list.filter(function(x){return x.id===id;})[0];
-    if(!it) return;
-    copyText(it.code).then(function(ok){ toast(ok? "已复制 "+it.name : "复制失败，长按码可手动复制"); });
-  }
+  list.push(makeItem(code, nm||r.name||"(未命名)", tag, season));
+  save(); render(); toast("已存入");
+  closeSheet();
 });
 document.getElementById("btn-export").addEventListener("click",function(){
   var blob=new Blob([JSON.stringify(list,null,1)],{type:"application/json"});

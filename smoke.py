@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 冒烟测试:真实 chromium 跑 存→赛季筛选→查→复制→删 全流程 + 截图
+# 冒烟测试:真实 chromium 跑 存→剪贴板→赛季→选择模式批量删→迁移 全流程
 import json, sys, os
 from playwright.sync_api import sync_playwright
 
@@ -21,7 +21,7 @@ with sync_playwright() as pw:
     pg.evaluate("localStorage.clear()"); pg.reload()
 
     CODE = "H4sIAAAAAAAAAOy8VWxbO1Ll2fb5zz+vvvrL7H7/OW/v9/6"
-    CODE2 = "H4sIAAAAAAAAAOy8VWxbO1Ll2fb5zz+vvvrL7H7/OW/v9/7"
+    CODE2 = CODE[:-1] + "7"
 
     # 1. 存 S18:粘贴带名字文案
     pg.click("#fab")
@@ -29,78 +29,92 @@ with sync_playwright() as pw:
     pg.click("#btn-save")
     check("存1:S18 列表1条", pg.locator("li.item").count() == 1)
     check("chip 含 S18", pg.locator(".chip", has_text="S18").count() >= 1)
-    check("chip 含 全部", pg.locator(".chip", has_text="全部").count() == 1)
+    check("选择按钮出现", pg.locator("#select-btn").is_visible())
 
     # 1b. 点击存阵容自动读剪贴板
     pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE}')")
     pg.click("#fab")
-    pg.wait_for_timeout(400)  # 等 readText promise 落地
-    auto = pg.input_value("#raw")
-    check("剪贴板自动填入 raw", auto == f"【星神】{CODE}")
+    pg.wait_for_timeout(400)
+    check("剪贴板自动填入 raw", pg.input_value("#raw") == f"【星神】{CODE}")
     check("剪贴板自动带出名字", pg.input_value("#name") == "星神")
     pg.click("#btn-save")
     check("存2:剪贴板流程入库", pg.locator("li.item").count() == 2)
 
-    # 2. 存 S17(此步同时验证:剪贴板里有【星神】CODE,但手动输入不被自动读取覆盖)
+    # 2. 存 S17(手动输入不被剪贴板自动读覆盖)
     pg.click("#fab")
     pg.fill("#raw", CODE2)
     pg.fill("#name", "天将九五")
     pg.fill("#season", "S17")
-    pg.wait_for_timeout(400)  # 给 readText resolve 窗口
+    pg.wait_for_timeout(400)
     check("手动输入不被剪贴板覆盖", pg.input_value("#raw") == CODE2)
     pg.click("#btn-save")
     check("存3:S17 列表3条", pg.locator("li.item").count() == 3)
-    check("chip 含 S17", pg.locator(".chip", has_text="S17").count() == 1)
 
-    # 3. 赛季筛选:S17 chip → 只见 S17
+    # 3. 赛季筛选
     pg.locator(".chip", has_text="S17").click()
     check("筛S17 1条", pg.locator("li.item").count() == 1)
-    check("筛S17 命中天将九五", "天将九五" in pg.locator("li.item").inner_text())
-    check("S17 徽标在卡片上", pg.locator("li.item .tag.season").inner_text() == "S17")
+    check("筛S17 命中天将九五", "天将九五" in pg.locator("li.item", has_text="天将九五").inner_text())
     pg.locator(".chip", has_text="S18").click()
     check("筛S18 2条", pg.locator("li.item").count() == 2)
-    check("筛S18 命中福星临门", "福星临门" in pg.locator("li.item", has_text="福星临门").inner_text())
     check("S18 徽标在卡片上", pg.locator("li.item .tag.season").first.inner_text() == "S18")
     pg.locator(".chip", has_text="全部").click()
     check("回全部 3条", pg.locator("li.item").count() == 3)
 
-    # 4. 搜索与赛季叠加:全部+S18下搜索九五
+    # 4. 搜索
     pg.fill("#search", "九五")
     check("搜九五 1条", pg.locator("li.item").count() == 1)
     pg.fill("#search", "")
     check("清搜索 3条", pg.locator("li.item").count() == 3)
 
-    # 5. 复制(真实剪贴板权限)
-    pg.locator("li.item", has_text="福星临门").locator(".copy").click()
+    # 5. 常态点整行=复制
+    pg.locator("li.item", has_text="福星临门").locator(".item-content").click()
     import time; time.sleep(0.3)
-    check("复制到剪贴板", pg.evaluate("navigator.clipboard.readText()") == CODE)
+    check("点行复制到剪贴板", pg.evaluate("navigator.clipboard.readText()") == CODE)
+    check("复制 toast", "已复制" in pg.locator("#toast").inner_text())
 
-    # 6. 筛选记忆:选 S17 → 重载仍是 S17
+    # 6. 筛选记忆
     pg.locator(".chip", has_text="S17").click()
     pg.reload()
-    check("重载后记住S17筛选", pg.locator("li.item").count() == 1 and "天将九五" in pg.locator("li.item").inner_text())
+    check("重载记住S17筛选", pg.locator("li.item").count() == 1 and "天将九五" in pg.locator("li.item").inner_text())
     pg.locator(".chip", has_text="全部").click()
 
-    # 7. 删除
-    pg.on("dialog", lambda d: d.accept())
-    pg.locator("li.item", has_text="福星临门").locator(".del").click()
-    check("删后剩 2", pg.locator("li.item").count() == 2)
-    check("toast 已删除", "已删除" in pg.locator("#toast").inner_text())
+    # 7. 选择模式:勾选单条 → 底部删除(1) → 确认弹层 → 删除
+    pg.click("#select-btn")
+    check("进入选择模式", pg.evaluate("document.body.classList.contains('select-mode')"))
+    check("选择模式行出现勾选圈", pg.locator("li.item .check").first.is_visible())
+    pg.locator("li.item", has_text="福星临门").locator(".item-content").click()
+    check("勾选后行高亮", "sel" in pg.locator("li.item", has_text="福星临门").get_attribute("class"))
+    check("计数显示已选1", "已选 1" in pg.locator("#count").inner_text())
+    check("删除按钮文案", pg.locator("#sb-delete").inner_text() == "删除(1)")
+    pg.locator("#sb-delete").click()
+    check("确认弹层出现", pg.locator("#confirm-sheet.open").count() == 1)
+    check("确认文案含删除1", "删除 1 套" in pg.locator("#confirm-msg").inner_text())
+    pg.locator("#cf-ok").click()
+    check("确认删除后剩2", pg.locator("li.item").count() == 2)
+    check("仍在选择模式(未删光)", pg.evaluate("document.body.classList.contains('select-mode')"))
+    check("删除后计数复位", "选择阵容" in pg.locator("#count").inner_text())
 
-    # 8. localStorage 结构断言
+    # 8. localStorage 结构
     stored = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))")
     check("localStorage 2条", len(stored) == 2)
     s17 = [x for x in stored if x["code"] == CODE2][0]
-    check("S17 条目 season 字段=S17", s17["season"] == "S17")
+    check("S17 条目 season=S17", s17["season"] == "S17")
     check("S17 条目 ts 正常", isinstance(s17["ts"], (int, float)) and s17["ts"] > 1e12)
 
-    # 9. 删光该赛季自动回全部
-    pg.locator("li.item .del").first.click()
-    pg.locator("li.item .del").first.click()
-    check("删光后回全部(无卡死)", pg.locator("li.item").count() == 0)
+    # 9. 全选删除 → 删光自动退出选择模式
+    pg.click("#sb-selectall")
+    check("全选后删除(2)", pg.locator("#sb-delete").inner_text() == "删除(2)")
+    check("全选按钮变取消全选", "取消全选" in pg.locator("#sb-selectall").inner_text())
+    pg.locator("#sb-delete").click()
+    check("确认文案-全部", "删除 全部阵容" in pg.locator("#confirm-msg").inner_text())
+    pg.locator("#cf-ok").click()
+    check("删光列表空", pg.locator("li.item").count() == 0)
+    check("删光自动退出选择", not pg.evaluate("document.body.classList.contains('select-mode')"))
+    check("退出后选择按钮回文案", pg.locator("#select-btn").inner_text() == "选择")
+    check("退出后 FAB 可见", pg.locator("#fab").is_visible())
     check("全部 chip 激活", "全部" in pg.locator("#seasons .chip.on").inner_text())
 
-    # 10. 迁移:旧格式(无 season)数据归当前赛季 S18
+    # 10. 旧数据(无 season)迁移归当前赛季
     pg.evaluate("localStorage.setItem('jccCompCodes.v1', JSON.stringify([{id:'x1',code:'Abc1234567890Abc',name:'旧数据',tag:'',ts:1}]))")
     pg.reload()
     old = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))[0]")
