@@ -98,7 +98,11 @@
     position:relative; overflow:hidden;
   }
   /* 左滑露出的操作(编辑/删除,在内容下层,右缘) */
-  .swipe-bg{position:absolute; top:0; right:0; bottom:0; width:168px; display:flex}
+  .swipe-bg{
+    position:absolute; top:0; right:0; bottom:0; width:168px; display:flex;
+    opacity:0; pointer-events:none; transition:opacity .15s ease;
+  }
+  .item.open .swipe-bg, .item.dragging .swipe-bg{opacity:1; pointer-events:auto}
   .swipe-del, .swipe-edit{
     width:50%; border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;
   }
