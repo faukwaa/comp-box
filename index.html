@@ -191,6 +191,13 @@
     outline:none; -webkit-appearance:none; appearance:none;
   }
   textarea{min-height:92px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px}
+  /* 显式粘贴按钮(替代 iOS 自动读,避免系统粘贴条干扰) */
+  .paste-btn{
+    display:block; width:100%; margin-top:8px; padding:10px; border:none;
+    border-radius:12px; background:#f2f2f7; color:var(--ink);
+    font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .paste-btn:active{background:#e5e5ea}
   input:focus, textarea:focus{background:#ececf1; box-shadow:0 0 0 3px rgba(28,28,30,.15)}
   .btn-row{display:flex; gap:10px; margin-top:18px}
   .btn{
@@ -282,6 +289,7 @@
     <p class="hint">从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字</p>
     <label for="raw">粘贴内容</label>
     <textarea id="raw" placeholder="长按粘贴…&#10;例：【福星临门】h5dySUPLXQxxxx…&#10;或纯阵容码"></textarea>
+    <button type="button" class="paste-btn" id="btn-paste">📋 从剪贴板粘贴</button>
     <label for="name">阵容名</label>
     <input type="text" id="name" placeholder="如：天将九五" autocomplete="off">
     <label for="tag">标签（可空）</label>
@@ -548,30 +556,32 @@ function openSheet(){
   document.getElementById("season").value=lastSeason();
   refreshSeasonSuggest();
   document.getElementById("sheet").classList.add("open");
-  // 不自动 focus(避免 iOS 键盘+粘贴条抢屏与权限弹窗打架);自动读剪贴板等表单展开后温和进行
-  setTimeout(tryReadClipboard, 350);
+  // 不自动读剪贴板(避免 iOS 系统粘贴条/权限浮层干扰表单),由用户点「从剪贴板粘贴」触发
 }
-function tryReadClipboard(){
-  if(!navigator.clipboard||!navigator.clipboard.readText) return;
+function pasteFromClipboard(){
+  if(!navigator.clipboard||!navigator.clipboard.readText){ toast("当前浏览器不支持读取剪贴板"); return; }
   navigator.clipboard.readText().then(function(t){
     if(!document.getElementById("sheet").classList.contains("open")) return; // 已关闭则弃
     t=(t||"").trim();
-    if(!t) return;
+    if(!t){ toast("剪贴板是空的"); return; }
     var ta=document.getElementById("raw");
-    if(ta.value&&ta.value!==t) return;  // 用户已手动输入/粘贴,别覆盖
     var r=extract(t);
-    if(!r.code) return;
     ta.value=t;
     var nm=document.getElementById("name");
-    if(!nm.dataset.touched&&!nm.value) nm.value=r.name;
-    toast("已从剪贴板读取");
-  },function(){ /* 权限被拒:静默 */ });
+    if(r.code){
+      if(!nm.dataset.touched&&!nm.value) nm.value=r.name;
+      toast("已粘贴，识别出阵容码");
+    }else{
+      toast("已粘贴，但没认出阵容码，可修改");
+    }
+  },function(){ toast("读取被拒，可长按输入框系统粘贴"); });
 }
 function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
 
 /* ---------- 事件 ---------- */
 document.getElementById("fab").addEventListener("click",openSheet);
 document.getElementById("btn-cancel").addEventListener("click",closeSheet);
+document.getElementById("btn-paste").addEventListener("click",pasteFromClipboard);
 document.getElementById("sheet").addEventListener("click",closeSheet);
 document.getElementById("select-btn").addEventListener("click",function(){ selecting? exitSelect() : enterSelect(); });
 document.getElementById("sb-delete").addEventListener("click",function(){ requestDelete(Object.keys(selected)); });
