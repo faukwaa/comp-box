@@ -82,7 +82,22 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(300)  # 等 snap 动画 + click 抑制窗口
     check("左滑露出删除按钮", li.evaluate("el => el.classList.contains('open')"))
     check("左滑后未误复制", "星神" not in pg.locator("#toast").inner_text())
-    # 点露出的删除 → 单删确认 → 确认
+    # 右滑收回:从露出的红区(删除按钮上)起手右滑
+    box2 = li.bounding_box()
+    pg.mouse.move(box2["x"] + box2["width"] - 30, box2["y"] + box2["height"] / 2)
+    pg.mouse.down()
+    pg.mouse.move(box2["x"] + box2["width"] - 30 + 160, box2["y"] + box2["height"] / 2, steps=8)
+    pg.mouse.up()
+    pg.wait_for_timeout(300)
+    check("右滑收回", li.evaluate("el => !el.classList.contains('open')"))
+    check("右滑未误删", pg.locator("li.item").count() == 3)
+    # 重新左滑 → 点删除 → 单删确认
+    box3 = li.bounding_box()
+    pg.mouse.move(box3["x"] + box3["width"] * 0.7, box3["y"] + box3["height"] / 2)
+    pg.mouse.down()
+    pg.mouse.move(box3["x"] + box3["width"] * 0.7 - 140, box3["y"] + box3["height"] / 2, steps=8)
+    pg.mouse.up()
+    pg.wait_for_timeout(300)
     li.locator(".swipe-del").click()
     check("单删确认文案含名字", "删除「星神」" in pg.locator("#confirm-msg").inner_text())
     pg.locator("#cf-ok").click()
@@ -98,6 +113,7 @@ with sync_playwright() as pw:
     # 7. 选择模式:点勾选圈勾选 → 底部删除(1) → 确认弹层 → 删除
     pg.click("#select-btn")
     check("进入选择模式", pg.evaluate("document.body.classList.contains('select-mode')"))
+    check("未选行不变灰", pg.evaluate("getComputedStyle(document.querySelector('li.item:not(.sel)')).opacity") == "1")
     check("选择模式行出现勾选圈", pg.locator("li.item .check").first.is_visible())
     pg.locator("li.item", has_text="福星临门").locator(".check").click()
     pg.wait_for_timeout(250)  # 等勾选圈 0.15s 过渡完成

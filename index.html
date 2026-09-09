@@ -88,6 +88,7 @@
   body.select-mode .check{display:flex}
   body.select-mode .swipe-content{padding-right:6px}
   .item.sel .check{background:var(--ink); border-color:var(--ink)}
+  .item.sel{background:#ececf0}
   .check svg{display:none}
   .item.sel .check svg{display:block}
   .item-content{flex:1; min-width:0; padding:12px 14px; cursor:pointer}
@@ -103,7 +104,6 @@
     margin-top:5px; letter-spacing:-.02em; word-break:break-all;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
-  .item.dim{opacity:.45}
   .empty{text-align:center; color:var(--sub); padding:70px 24px; font-size:15px; line-height:1.8}
   .empty .big{font-size:46px; margin-bottom:12px}
   /* ---------- 底部:选择操作条 ---------- */
@@ -366,7 +366,7 @@ function render(){
   var ul=document.getElementById("list");
   ul.innerHTML=rows.map(function(it){
     var sel=selected[it.id]?true:false;
-    return '<li class="item'+(sel?" sel":"")+(selecting?" dim":"")+'" data-id="'+it.id+'">'+
+    return '<li class="item'+(sel?" sel":"")+'" data-id="'+it.id+'">'+
       '<div class="swipe-bg"><button class="swipe-del" type="button">删除</button></div>'+
       '<div class="swipe-content">'+
         '<span class="check">'+CHECK_SVG+'</span>'+
@@ -520,8 +520,8 @@ function closeSwipes(excludeLi){
 function openSwipe(li){ closeSwipes(li); li.classList.add("open"); }
 document.getElementById("list").addEventListener("pointerdown",function(ev){
   if(selecting) return;                       // 选择模式禁用滑动
-  var li=ev.target.closest("li.item"), sc=ev.target.closest(".swipe-content");
-  if(!li||!sc) return;
+  var li=ev.target.closest("li.item");
+  if(!li) return;                             // 整行可起手(含露出的删除红区),便于右滑收回
   drag={li:li, x0:ev.clientX, y0:ev.clientY, base:li.classList.contains("open")?-SWIPE_W:0, dx:0, moved:false};
   li.classList.add("dragging");
   try{ ev.target.setPointerCapture(ev.pointerId); }catch(e){}
@@ -548,9 +548,9 @@ function endDrag(cancel){
   li.classList.remove("dragging");
   if(!cancel){
     var x=drag.base+drag.dx;
-    if(x<=-SWIPE_W*0.5) openSwipe(li); else closeSwipes(li);
+    if(x<=-SWIPE_W*0.5) openSwipe(li); else closeSwipes(); // 关闭全部(含自身)
   }else{
-    closeSwipes(li);
+    closeSwipes();
   }
   drag=null;
   if(moved) suppressClickUntil=Date.now()+350; // 拖动结束抑制随后的合成 click
