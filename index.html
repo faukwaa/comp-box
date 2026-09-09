@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f5f7">
+<title>阵容码盒</title>
+<style>
+  :root{
+    --bg:#f5f5f7; --card:#fff; --ink:#1d1d1f; --sub:#86868b;
+    --accent:#d9a441; --accent-ink:#7a5c14; --line:#e5e5ea;
+    --danger:#ff3b30; --ok:#34c759;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0}
+  html{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.5;
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 96px);
+    max-width:640px; margin:0 auto; min-height:100%;
+  }
+  header{display:flex; align-items:baseline; gap:10px; padding:20px 16px 8px}
+  h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
+  #count{color:var(--sub); font-size:13px; font-weight:500}
+  #search{
+    display:block; width:calc(100% - 32px); margin:8px 16px 4px;
+    padding:11px 40px 11px 14px; border:none; border-radius:12px;
+    background:#fff; color:var(--ink); font-size:16px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+    outline:none;
+  }
+  #search:focus{box-shadow:0 0 0 3px rgba(217,164,65,.35)}
+  #list{list-style:none; margin:10px 0 0; padding:0 16px}
+  .item{
+    background:var(--card); border-radius:16px; padding:14px 14px 12px;
+    margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.05);
+    display:flex; gap:10px; align-items:flex-start;
+  }
+  .item-main{flex:1; min-width:0}
+  .item-name{font-size:17px; font-weight:700; word-break:break-all; display:flex; gap:8px; align-items:center}
+  .tag{
+    flex-shrink:0; font-size:11px; font-weight:600; color:var(--accent-ink);
+    background:rgba(217,164,65,.14); border-radius:6px; padding:2px 7px;
+  }
+  .item-code{
+    font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:12px; color:var(--sub);
+    margin-top:3px; word-break:break-all; letter-spacing:-.01em;
+  }
+  .item-actions{display:flex; flex-direction:column; gap:6px; flex-shrink:0}
+  .icon-btn{
+    width:40px; height:40px; border-radius:12px; border:none; cursor:pointer;
+    background:#f2f2f5; color:var(--ink); font-size:18px; display:flex;
+    align-items:center; justify-content:center; line-height:1;
+  }
+  .icon-btn.del{color:var(--danger); background:rgba(255,59,48,.08)}
+  .empty{
+    text-align:center; color:var(--sub); padding:64px 24px;
+    font-size:15px;
+  }
+  .empty .big{font-size:44px; margin-bottom:10px}
+  /* 底部悬浮:新增 */
+  #fab{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom) + 18px);
+    background:var(--ink); color:#fff; border:none; border-radius:999px;
+    padding:16px 30px; font-size:17px; font-weight:700; cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.28); display:flex; gap:8px; align-items:center;
+    max-width:calc(100% - 48px); white-space:nowrap;
+  }
+  #fab:active{transform:translateX(-50%) scale(.97)}
+  .toolbar{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom) + 82px);
+    display:flex; gap:12px; font-size:12px; color:var(--sub);
+  }
+  .toolbar button{background:none; border:none; color:var(--sub); font-size:13px; cursor:pointer; padding:4px}
+  .toolbar button:active{color:var(--ink)}
+  /* 新增浮层 */
+  #sheet{
+    position:fixed; inset:0; z-index:10; display:none;
+    background:rgba(0,0,0,.4); align-items:flex-end; justify-content:center;
+  }
+  #sheet.open{display:flex}
+  .panel{
+    width:100%; max-width:640px; background:var(--card);
+    border-radius:20px 20px 0 0; padding:10px 16px calc(env(safe-area-inset-bottom) + 16px);
+  }
+  .grab{width:40px; height:5px; border-radius:3px; background:var(--line); margin:6px auto 14px}
+  .panel h2{font-size:18px; font-weight:800; margin-bottom:4px}
+  .panel .hint{font-size:13px; color:var(--sub); margin-bottom:14px}
+  label{font-size:13px; font-weight:600; color:var(--sub); display:block; margin:12px 0 6px}
+  textarea, input[type=text]{
+    width:100%; border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; font-size:16px; font-family:inherit; background:#fff;
+    outline:none; -webkit-appearance:none;
+  }
+  textarea{min-height:96px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:13px}
+  input:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(217,164,65,.2)}
+  .row{display:flex; gap:10px}
+  .row > *{flex:1}
+  .btn-row{display:flex; gap:10px; margin-top:18px}
+  .btn{
+    flex:1; padding:14px; border:none; border-radius:14px; font-size:17px; font-weight:700; cursor:pointer;
+  }
+  .btn.primary{background:var(--ink); color:#fff}
+  .btn.ghost{background:#f2f2f5; color:var(--ink)}
+  /* toast */
+  #toast{
+    position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 20px); transform:translateX(-50%) translateY(-8px);
+    background:rgba(29,29,31,.92); color:#fff; padding:9px 18px; border-radius:999px;
+    font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:.25s; z-index:20;
+    max-width:80%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧺 阵容码盒</h1>
+  <span id="count"></span>
+</header>
+
+<input id="search" type="search" placeholder="🔍 搜阵容名 / 标签 / 码…" autocomplete="off">
+
+<ul id="list"></ul>
+<div id="empty" class="empty" hidden>
+  <div class="big">🪙</div>
+  <div id="empty-text">还没有阵容码<br>点下面「存阵容」把好阵容收进来</div>
+</div>
+
+<div class="toolbar" id="toolbar" hidden>
+  <button id="btn-export">导出备份</button>
+  <button id="btn-import">导入恢复</button>
+  <input type="file" id="file" accept="application/json,.json" hidden>
+</div>
+
+<button id="fab">＋ 存阵容</button>
+
+<div id="sheet">
+  <div class="panel" onclick="event.stopPropagation()">
+    <div class="grab"></div>
+    <h2 id="sheet-title">存阵容</h2>
+    <p class="hint">从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字</p>
+    <label for="raw">粘贴内容</label>
+    <textarea id="raw" placeholder="长按粘贴…&#10;例：【福星临门】h5dySUPLXQxxxx…&#10;或纯阵容码"></textarea>
+    <label for="name">阵容名</label>
+    <input type="text" id="name" placeholder="如：天将九五" autocomplete="off">
+    <label for="tag">标签（可空）</label>
+    <input type="text" id="tag" placeholder="如：S18 / 星神 / 上分" autocomplete="off">
+    <div class="btn-row">
+      <button class="btn ghost" id="btn-cancel">取消</button>
+      <button class="btn primary" id="btn-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var KEY="jccCompCodes.v1";
+var list=[], editingId=null, q="";
+
+/* ---------- 纯函数:粘贴解析（node 可测） ---------- */
+// 金铲铲/云顶阵容码:【阵容码】开头的长字母数字串(hex/base64,可能被中文/括号裹着)。挑最长 alnum 串当码,余文当名字。
+function extract(text){
+  text=(text||"").trim();
+  if(!text) return {code:"",name:"",rest:text};
+  var code="", rest=[];
+  text.split(/\s+/).forEach(function(t){
+    var m=t.match(/[A-Za-z0-9+/=]{12,}/); // 码子串,容忍【阵容码】/中文前缀直接粘连
+    if(m&&m[0].length>=code.length&&code.length>0){ return; } // 与已认码同长的串(重复粘贴)丢弃
+    if(m&&m[0].length>code.length){ code=m[0]; return; }
+    rest.push(t);
+  });
+  var name=rest.join(" ").trim();
+  if(!name&&code){ // 整段单 token:码被名字文字裹着,剥离码取剩余中文
+    var leftover=text.split(code).join("").replace(/[【】\[\]《》()（）]/g," ");
+    name=leftover;
+  }
+  name=name.replace(/(阵容码|分享码|代码|阵容代码)\s*[:：]?\s*/g," ")
+           .replace(/^[【\[《("'“\s.,;:!?。，；：！？、-]+|[】\]》)"'”\s.,;:!?。，；：！？、-]+$/g,"")
+           .replace(/\s+/g," ")
+           .trim().slice(0,40);
+  return {code:code, name:name, rest:rest.join(" ").trim()};
+}
+function makeItem(code,name,tag,ts){
+  return {id:(ts||Date.now())+"-"+Math.random().toString(36).slice(2,7), code:code, name:name||"(未命名)", tag:tag||"", ts:ts||Date.now()};
+}
+
+/* ---------- 存储 ---------- */
+function load(){
+  try{ list=JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){ list=[]; }
+  if(!Array.isArray(list)) list=[];
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(list)); }
+
+/* ---------- 渲染 ---------- */
+function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function tagHtml(t){ return t? '<span class="tag">'+esc(t)+'</span>' : ''; }
+function render(){
+  var k=(q||"").toLowerCase();
+  var rows=list.filter(function(it){
+    if(!k) return true;
+    return (it.name+" "+it.tag+" "+it.code).toLowerCase().indexOf(k)>-1;
+  }).sort(function(a,b){return b.ts-a.ts;});
+  document.getElementById("count").textContent=list.length? (list.length+" 套 · 搜到 "+rows.length) : "";
+  document.getElementById("count").textContent=list.length? (list.length+" 套"+(k&&rows.length!==list.length?" · 命中 "+rows.length:"")) : "";
+  var ul=document.getElementById("list");
+  ul.innerHTML=rows.map(function(it){
+    return '<li class="item" data-id="'+it.id+'">'+
+      '<div class="item-main">'+
+        '<div class="item-name">'+esc(it.name)+tagHtml(it.tag)+'</div>'+
+        '<div class="item-code">'+esc(it.code)+'</div>'+
+      '</div>'+
+      '<div class="item-actions">'+
+        '<button class="icon-btn copy" title="复制码">⧉</button>'+
+        '<button class="icon-btn del" title="删除">🗑</button>'+
+      '</div></li>';
+  }).join("");
+  var empty=document.getElementById("empty");
+  empty.hidden=rows.length>0;
+  document.getElementById("empty-text").innerHTML=list.length? "没有匹配「"+esc(q)+"」的阵容" : "还没有阵容码<br>点下面「存阵容」把好阵容收进来";
+  document.getElementById("toolbar").hidden=list.length<1;
+}
+
+/* ---------- 动作 ---------- */
+function toast(msg){
+  var t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(toast._h); toast._h=setTimeout(function(){t.classList.remove("show");},1600);
+}
+function copyText(s){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(s).then(function(){return true;},function(){return false;});
+  }
+  // fallback: 隐藏 textarea 选中复制(处理 clipboard 权限拒绝)
+  var ta=document.createElement("textarea");
+  ta.value=s; ta.style.cssText="position:fixed;opacity:0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta);
+  return Promise.resolve(true);
+}
+function del(id){
+  var it=list.filter(function(x){return x.id===id;})[0];
+  if(!it) return;
+  if(!confirm("删除「"+it.name+"」？")) return;
+  list=list.filter(function(x){return x.id!==id;});
+  save(); render(); toast("已删除");
+}
+function openSheet(){
+  editingId=null;
+  document.getElementById("raw").value="";
+  document.getElementById("name").value="";
+  document.getElementById("tag").value="";
+  document.getElementById("sheet-title").textContent="存阵容";
+  document.getElementById("sheet").classList.add("open");
+  document.getElementById("raw").focus();
+}
+function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
+
+/* ---------- 事件 ---------- */
+document.getElementById("fab").addEventListener("click",openSheet);
+document.getElementById("btn-cancel").addEventListener("click",closeSheet);
+document.getElementById("sheet").addEventListener("click",closeSheet);
+document.getElementById("search").addEventListener("input",function(){ q=this.value; render(); });
+document.getElementById("raw").addEventListener("input",function(){
+  // 粘贴后自动带出名字,仅在名字还没手填时生效
+  var nm=document.getElementById("name");
+  if(nm.dataset.touched) return;
+  var r=extract(this.value);
+  if(r.code&&!nm.value) nm.value=r.name;
+  if(r.code&&!nm.value&&r.rest) nm.value=r.name;
+});
+document.getElementById("name").addEventListener("input",function(){ this.dataset.touched="1"; });
+document.getElementById("btn-save").addEventListener("click",function(){
+  var raw=document.getElementById("raw").value;
+  var nm=document.getElementById("name").value.trim();
+  var tag=document.getElementById("tag").value.trim();
+  var r=extract(raw);
+  if(!r.code){ toast("没认到阵容码，请检查粘贴内容"); return; }
+  var code=r.code;
+  if(editingId){
+    var it=list.filter(function(x){return x.id===editingId;})[0];
+    if(!it) return;
+    it.code=code; it.name=nm||r.name||it.name; it.tag=tag; it.ts=Date.now();
+    toast("已更新");
+  }else{
+    list.push(makeItem(code, nm||r.name||"(未命名)", tag));
+    toast("已存入");
+  }
+  save(); render(); closeSheet();
+});
+document.getElementById("list").addEventListener("click",function(ev){
+  var btn=ev.target.closest("button"); if(!btn) return;
+  var li=ev.target.closest("li.item"); if(!li) return;
+  var id=li.dataset.id;
+  if(btn.classList.contains("del")) return del(id);
+  if(btn.classList.contains("copy")){
+    var it=list.filter(function(x){return x.id===id;})[0];
+    if(!it) return;
+    copyText(it.code).then(function(ok){ toast(ok? "已复制 "+it.name : "复制失败，长按码可手动复制"); });
+  }
+});
+document.getElementById("btn-export").addEventListener("click",function(){
+  var blob=new Blob([JSON.stringify(list,null,1)],{type:"application/json"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="jcc-codes-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href); document.body.removeChild(a);},500);
+  toast("备份文件已导出");
+});
+document.getElementById("btn-import").addEventListener("click",function(){ document.getElementById("file").click(); });
+document.getElementById("file").addEventListener("change",function(){
+  var f=this.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var arr=JSON.parse(rd.result);
+      if(!Array.isArray(arr)) throw 0;
+      arr=arr.filter(function(x){return x&&x.code;}).map(function(x){return makeItem(String(x.code),String(x.name||""),String(x.tag||""),Number(x.ts)||Date.now());});
+      if(!arr.length){ toast("文件里没有阵容码"); return; }
+      if(confirm("导入 "+arr.length+" 套？将追加到现有列表")){
+        list=list.concat(arr); save(); render(); toast("导入成功");
+      }
+    }catch(e){ toast("文件格式不对"); }
+  };
+  rd.readAsText(f);
+  this.value="";
+});
+
+/* ---------- init ---------- */
+load(); render();
+window.__extract=extract; // 供 node 单测
+})();
+</script>
+</body>
+</html>
