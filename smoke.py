@@ -244,6 +244,18 @@ with sync_playwright() as pw:
     check("原名字消失", "裁决婕拉" not in pg.locator("#list").inner_text())
     check("编辑后条数不变", pg.locator("li.item").count() == 4)
 
+    # 11c. 收藏置顶
+    pg.locator("li.item", has_text="零标签阵容").locator(".fav-btn").click()
+    check("收藏 toast", waitfor(lambda: "已收藏" in pg.locator("#toast").inner_text()))
+    check("收藏后置顶", "零标签阵容" in pg.locator("li.item").first.inner_text())
+    check("置顶行带星标", pg.locator("li.item").first.locator(".fav-btn.on").count() == 1)
+    check("原首位后移", pg.locator("li.item").nth(1).inner_text().find("福星回归") >= 0 or "福星回归" in pg.locator("li.item").nth(1).inner_text())
+    # 取消收藏 → 回原顺序(ts 最小者殿后)
+    pg.locator("li.item").first.locator(".fav-btn").click()
+    check("取消收藏 toast", waitfor(lambda: "取消收藏" in pg.locator("#toast").inner_text()))
+    check("取消后回到末位", "零标签阵容" in pg.locator("li.item").last.inner_text())
+    check("无置顶星标残留", pg.locator(".fav-btn.on").count() == 0)
+
     # 12. 云同步(真实本地 HTTP 服务器模拟 GitHub contents API)
     import http.server, threading
     GH = {"sha": "sha0", "items": [], "ver": 0, "lock": threading.Lock()}

@@ -114,7 +114,17 @@
   .item.sel{background:#ececf0}
   .check svg{display:none}
   .item.sel .check svg{display:block}
-  .item-content{flex:1; min-width:0; padding:12px 14px; cursor:pointer}
+  .item-content{flex:1; min-width:0; padding:12px 10px 12px 14px; cursor:pointer; display:flex; align-items:center; gap:6px}
+  .ic-main{flex:1; min-width:0}
+  /* 收藏星标(常驻,点星=收藏;其它区域=复制) */
+  .fav-btn{
+    flex-shrink:0; width:34px; height:34px; border:none; background:none; cursor:pointer;
+    font-size:19px; line-height:1; color:#c7c7cc; padding:0; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fav-btn:active{background:var(--sel-bg)}
+  .fav-btn.on{color:#f4c550; text-shadow:0 1px 2px rgba(200,150,20,.35)}
+  .fav-star{color:#f4c550; font-size:13px; margin-right:2px}
   .item-row{display:flex; align-items:center; gap:8px; min-width:0}
   .item-name{font-size:16px; font-weight:650; letter-spacing:-.01em; word-break:break-all}
   .tag{
@@ -425,7 +435,11 @@ function visibleRows(){
     if(tagFilter&&(it.tag||"")!==tagFilter) return false;
     if(!k) return true;
     return (it.name+" "+it.tag+" "+it.season+" "+it.code).toLowerCase().indexOf(k)>-1;
-  }).sort(function(a,b){return b.ts-a.ts;});
+  }).sort(function(a,b){
+    var fa=a.fav?1:0, fb=b.fav?1:0;
+    if(fa!==fb) return fb-fa;                 // 收藏置顶
+    return (b.ts||0)-(a.ts||0);
+  });
 }
 function activeFilters(){
   var parts=[];
@@ -460,8 +474,11 @@ function render(){
       '<div class="swipe-content">'+
         '<span class="check">'+CHECK_SVG+'</span>'+
         '<div class="item-content">'+
-          '<div class="item-row">'+seasonHtml(it.season)+'<span class="item-name">'+esc(it.name)+'</span>'+tagHtml(it.tag)+'</div>'+
-          '<div class="item-code">'+esc(it.code)+'</div>'+
+          '<div class="ic-main">'+
+            '<div class="item-row">'+(it.fav?'<span class="fav-star">★</span>':'')+seasonHtml(it.season)+'<span class="item-name">'+esc(it.name)+'</span>'+tagHtml(it.tag)+'</div>'+
+            '<div class="item-code">'+esc(it.code)+'</div>'+
+          '</div>'+
+          '<button type="button" class="fav-btn'+(it.fav?' on':'')+'" data-fav="'+it.id+'">'+(it.fav?'★':'☆')+'</button>'+
         '</div>'+
       '</div></li>';
   }).join("");
@@ -555,6 +572,15 @@ function refreshSeasonSuggest(){
   list.forEach(function(it){ var s=it.season; if(s&&!seen[s]){seen[s]=1; opts.push(s);} });
   [DEFAULT_SEASON, "S19","S17"].forEach(function(s){ if(!seen[s]){seen[s]=1; opts.push(s);} });
   box.innerHTML=opts.map(function(s){ return '<option value="'+esc(s)+'">'; }).join("");
+}
+function toggleFav(id){
+  var it=null;
+  for(var i=0;i<list.length;i++) if(list[i].id===id) it=list[i];
+  if(!it) return;
+  it.fav=!it.fav;
+  save(); render();
+  toast(it.fav? "已收藏，置顶" : "已取消收藏");
+  if(cloudOn()) syncPush();
 }
 function openSheet(item){
   editingId=item? item.id : null;
@@ -709,6 +735,8 @@ document.getElementById("list").addEventListener("click",function(ev){
   if(Date.now()<suppressClickUntil){ suppressClickUntil=0; return; } // 刚拖完的合成 click
   var li=ev.target.closest("li.item"); if(!li) return;
   var id=li.dataset.id;
+  var favBtn=ev.target.closest(".fav-btn");
+  if(favBtn){ toggleFav(id); return; }         // 点星=收藏/取消(不影响复制)
   var editBtn=ev.target.closest(".swipe-edit");
   if(editBtn){                                   // 滑动露出的编辑
     var eit=null;
