@@ -1,6 +1,6 @@
 // extract() 单测:从 comp-box.html 内联 JS 中取出纯函数执行(无 DOM 依赖)
 const fs = require("fs");
-const html = fs.readFileSync(__dirname + "/comp-box.html", "utf8");
+const html = fs.readFileSync(__dirname + "/index.html", "utf8");
 const js = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const start = js.indexOf("function extract(");
 const end = js.indexOf("function makeItem(");
