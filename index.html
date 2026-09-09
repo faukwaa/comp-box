@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f2f2f7">
-<link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/png" href="logo-64.png">
 <link rel="apple-touch-icon" href="logo.png">
 <title>阵容码盒</title>
 <style>
@@ -59,8 +59,19 @@
   }
   #search::placeholder{color:#98989f}
   .chips{display:flex; gap:8px; padding:10px 16px 2px; overflow-x:auto; scrollbar-width:none}
+  .chips[hidden]{display:none}
   .chips::-webkit-scrollbar{display:none}
   #tag-chips{padding-top:6px}
+  /* 标签折叠开关 */
+  .tag-toggle{
+    display:flex; align-items:center; gap:5px; margin:4px 16px 0;
+    background:none; border:none; color:var(--sub); font-size:13px; font-weight:600;
+    padding:6px 4px; cursor:pointer;
+  }
+  .tag-toggle:active{opacity:.6}
+  .tag-toggle.on{color:var(--accent-ink)}
+  .tag-toggle .tag-arrow{font-size:10px; transition:transform .18s}
+  .tag-toggle.open .tag-arrow{transform:rotate(180deg)}
   .chip{
     border:none; border-radius:999px; padding:7px 14px; font-size:13px; font-weight:600;
     background:#e4e4e9; color:var(--sub); white-space:nowrap; cursor:pointer; flex-shrink:0;
@@ -116,7 +127,8 @@
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
   .empty{text-align:center; color:var(--sub); padding:70px 24px; font-size:15px; line-height:1.8}
-  .empty .big{font-size:46px; margin-bottom:12px}
+  .big{font-size:46px; margin-bottom:12px}
+  .big svg{width:58px; height:58px; display:block; margin:0 auto 4px; filter:drop-shadow(0 2px 6px rgba(168,110,20,.35))}
   /* ---------- 底部:选择操作条 ---------- */
   #select-bar{
     position:fixed; left:50%; transform:translateX(-50%);
@@ -223,7 +235,7 @@
 </head>
 <body>
 <header>
-  <img src="logo.png" alt="金铲铲之战">
+  <img src="logo-64.png" alt="金铲铲之战" width="32" height="32">
   <h1>阵容码盒</h1>
   <span id="count"></span>
   <div id="header-right">
@@ -234,11 +246,33 @@
 
 <input id="search" type="search" placeholder="搜阵容名 / 标签 / 码…" autocomplete="off">
 <div class="chips" id="seasons"></div>
+<button class="tag-toggle" id="tag-toggle" hidden><span id="tag-toggle-label">标签筛选</span><span class="tag-arrow">▾</span></button>
 <div class="chips" id="tag-chips" hidden></div>
 
 <ul id="list"></ul>
 <div id="empty" class="empty" hidden>
-  <div class="big">🪙</div>
+  <div class="big">
+    <svg viewBox="0 0 64 64" aria-label="金铲铲金币">
+      <defs>
+        <radialGradient id="coinG" cx="38%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#ffe9a8"/>
+          <stop offset="45%" stop-color="#f4c550"/>
+          <stop offset="80%" stop-color="#db9d2c"/>
+          <stop offset="100%" stop-color="#a06a12"/>
+        </radialGradient>
+      </defs>
+      <circle cx="32" cy="32" r="29.5" fill="url(#coinG)" stroke="#8a5a10" stroke-width="2.2"/>
+      <circle cx="32" cy="32" r="24" fill="none" stroke="#b07f1d" stroke-width="1.4" opacity=".85"/>
+      <circle cx="32" cy="32" r="20.5" fill="none" stroke="#8a5a10" stroke-width=".8" opacity=".5"/>
+      <ellipse cx="21" cy="18.5" rx="9" ry="4.6" fill="#fff7da" opacity=".6" transform="rotate(-20 21 18.5)"/>
+      <g fill="#6e4208">
+        <rect x="29" y="9.5" width="6" height="23" rx="3"/>
+        <ellipse cx="32" cy="40" rx="10.6" ry="9.8"/>
+      </g>
+      <ellipse cx="32" cy="41" rx="6.6" ry="5.8" fill="#a97a1c" opacity=".85"/>
+      <rect x="29.7" y="9.5" width="1.6" height="23" rx=".8" fill="#7d5310" opacity=".6"/>
+    </svg>
+  </div>
   <div id="empty-text">还没有阵容码<br>点下面「存阵容」把好阵容收进来</div>
 </div>
 
@@ -311,7 +345,7 @@
 var KEY="jccCompCodes.v1", FILTER_KEY="jccCompCodes.seasonFilter", TAG_FILTER_KEY="jccCompCodes.tagFilter", LAST_SEASON_KEY="jccCompCodes.lastSeason";
 var DEFAULT_SEASON="S18"; // 当前赛季,换季改这里
 var list=[], q="", seasonFilter=null, tagFilter=null; // null=全部
-var selecting=false, selected={}, selectAllFlag=false;
+var selecting=false, selected={}, tagExpanded=false;
 
 /* ---------- 纯函数:粘贴解析（node 可测） ---------- */
 // 金铲铲/云顶阵容码:【阵容码】开头的长字母数字串(hex/base64,可能被中文/括号裹着)。挑最长 alnum 串当码,余文当名字。
@@ -372,7 +406,13 @@ function refreshTagChips(){
   list.forEach(function(it){ var t=(it.tag||"").trim(); if(t&&!seen[t]){ seen[t]=1; tags.push(t); } });
   tags.sort();
   var box=document.getElementById("tag-chips");
-  box.hidden=!tags.length;
+  var tgl=document.getElementById("tag-toggle");
+  tgl.hidden=!tags.length;
+  var openState=tagExpanded||!!tagFilter;         // 有激活标签时保持展开可见
+  box.hidden=!tags.length||!openState;
+  tgl.classList.toggle("open", openState);
+  tgl.classList.toggle("on", !!tagFilter);
+  document.getElementById("tag-toggle-label").textContent=tagFilter? "标签 · "+tagFilter : "标签筛选";
   if(tagFilter&&tags.indexOf(tagFilter)<0){ tagFilter=null; try{localStorage.removeItem(TAG_FILTER_KEY);}catch(e){} }
   var chips=[{v:"__NONE__",t:"全部标签"}].concat(tags.map(function(s){return {v:s,t:s};}));
   box.innerHTML=chips.map(function(c){
@@ -563,6 +603,7 @@ document.getElementById("seasons").addEventListener("click",function(ev){
   try{ seasonFilter? localStorage.setItem(FILTER_KEY,seasonFilter) : localStorage.removeItem(FILTER_KEY); }catch(e){}
   render();
 });
+document.getElementById("tag-toggle").addEventListener("click",function(){ tagExpanded=!tagExpanded; refreshTagChips(); });
 document.getElementById("tag-chips").addEventListener("click",function(ev){
   var chip=ev.target.closest(".chip"); if(!chip) return;
   var t=chip.dataset.tag;

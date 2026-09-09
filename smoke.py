@@ -176,7 +176,10 @@ with sync_playwright() as pw:
       {{id:'a4',code:'{CODE2}',name:'零标签阵容',tag:'',season:'S18',ts:Date.now()-3}}
     ]))""")
     pg.reload()
-    check("标签 chips 行出现", pg.locator("#tag-chips").is_visible())
+    check("标签开关出现(默认折叠)", pg.locator("#tag-toggle").is_visible() and pg.locator("#tag-toggle").evaluate("el => el.classList.contains('open')") == False)
+    check("标签行初始收起", not pg.locator("#tag-chips").is_visible())
+    pg.click("#tag-toggle")  # 展开标签行
+    check("标签行展开", pg.locator("#tag-chips").is_visible() and "open" in pg.locator("#tag-toggle").get_attribute("class"))
     check("chips 含追三星", pg.locator("#tag-chips .chip", has_text="追三星").count() == 1)
     check("chips 含上分", pg.locator("#tag-chips .chip", has_text="上分").count() == 1)
     check("全部4条可见", pg.locator("li.item").count() == 4)
@@ -184,6 +187,7 @@ with sync_playwright() as pw:
     pg.locator("#tag-chips .chip", has_text="追三星").click()
     check("筛追三星 2条", pg.locator("li.item").count() == 2)
     check("chips 追三星高亮", "on" in pg.locator("#tag-chips .chip", has_text="追三星").get_attribute("class"))
+    check("激活标签时开关显示标签名", "追三星" in pg.locator("#tag-toggle-label").inner_text())
     # 与赛季叠加:S17
     pg.locator("#seasons .chip", has_text="S17").click()
     check("追三星+S17 1条", pg.locator("li.item").count() == 1)
