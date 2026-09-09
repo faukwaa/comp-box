@@ -42,11 +42,10 @@ with sync_playwright() as pw:
     check("chip 含 S18", pg.locator("#seasons .chip", has_text="S18").count() >= 1)
     check("选择按钮出现", pg.locator("#select-btn").is_visible())
 
-    # 1b. 点击存阵容自动读剪贴板
+    # 1b. 点击存阵容自动读剪贴板(延迟350ms后温和读取,轮询等待)
     pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE}')")
     pg.click("#fab")
-    pg.wait_for_timeout(400)
-    check("剪贴板自动填入 raw", pg.input_value("#raw") == f"【星神】{CODE}")
+    check("剪贴板自动填入 raw", waitfor(lambda: pg.input_value("#raw") == f"【星神】{CODE}", timeout=5))
     check("剪贴板自动带出名字", pg.input_value("#name") == "星神")
     pg.click("#btn-save")
     check("存2:剪贴板流程入库", pg.locator("li.item").count() == 2)

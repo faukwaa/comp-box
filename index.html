@@ -548,8 +548,8 @@ function openSheet(){
   document.getElementById("season").value=lastSeason();
   refreshSeasonSuggest();
   document.getElementById("sheet").classList.add("open");
-  tryReadClipboard(); // 点按钮=用户手势,Safari 允许读剪贴板(首次弹权限)
-  document.getElementById("raw").focus();
+  // 不自动 focus(避免 iOS 键盘+粘贴条抢屏与权限弹窗打架);自动读剪贴板等表单展开后温和进行
+  setTimeout(tryReadClipboard, 350);
 }
 function tryReadClipboard(){
   if(!navigator.clipboard||!navigator.clipboard.readText) return;
