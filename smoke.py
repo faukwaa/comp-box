@@ -42,7 +42,7 @@ with sync_playwright() as pw:
     check("chip 含 S18", pg.locator("#seasons .chip", has_text="S18").count() >= 1)
     check("选择按钮出现", pg.locator("#select-btn").is_visible())
 
-    # 1c. grabber 下拉 / 点击 关闭表单
+    # 1c. grabber 下拉关闭 / 点击横线不关闭(按用户要求移除点击关)
     pg.click("#fab")
     pg.wait_for_timeout(450)  # 等 sheet 弹出动画完成再拖
     check("表单打开", pg.locator("#sheet.open").count() == 1)
@@ -53,8 +53,12 @@ with sync_playwright() as pw:
     pg.mouse.up()
     check("下拉关闭表单", waitfor(lambda: pg.locator("#sheet.open").count() == 0))
     pg.click("#fab")
+    pg.wait_for_timeout(400)
     pg.locator("#sheet-grab").click()
-    check("点击横线关闭表单", waitfor(lambda: pg.locator("#sheet.open").count() == 0))
+    pg.wait_for_timeout(400)
+    check("点击横线不关闭", pg.locator("#sheet.open").count() == 1)
+    pg.mouse.click(195, 90)  # 点背景(遮罩)关闭
+    check("点背景关闭表单", waitfor(lambda: pg.locator("#sheet.open").count() == 0))
 
     # 1b. 点「从剪贴板粘贴」按钮读取
     pg.evaluate(f"navigator.clipboard.writeText('【星神】{CODE}')")

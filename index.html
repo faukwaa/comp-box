@@ -51,12 +51,21 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion: reduce){#sync-btn.syncing svg{animation:none}}
   /* ---------- 搜索 & 赛季 ---------- */
+  .search-wrap{position:relative; margin:8px 16px 0}
   #search{
-    display:block; width:calc(100% - 32px); margin:8px 16px 0;
-    padding:11px 16px; border:none; border-radius:12px;
+    display:block; width:100%; box-sizing:border-box;
+    padding:11px 42px 11px 16px; border:none; border-radius:12px;
     background:#e4e4e9; color:var(--ink); font-size:16px; outline:none;
     -webkit-appearance:none; appearance:none;
   }
+  #search-clear{
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    width:24px; height:24px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(120,120,128,.28); color:#3c3c43;
+    font-size:11px; padding:0; display:flex; align-items:center; justify-content:center;
+  }
+  #search-clear[hidden]{display:none}
+  #search-clear:active{background:rgba(120,120,128,.5)}
   #search::placeholder{color:#98989f}
   .chips{display:flex; gap:8px; padding:10px 16px 2px; overflow-x:auto; scrollbar-width:none}
   .chips[hidden]{display:none}
@@ -145,15 +154,21 @@
   }
   /* ---------- 底部:选择操作条 ---------- */
   #select-bar{
-    position:fixed; left:50%; transform:translateX(-50%);
+    position:fixed; left:50%; transform:translateX(-50%) translateY(16px);
     bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:6;
     width:calc(100% - 32px); max-width:608px;
     background:rgba(28,28,30,.92); -webkit-backdrop-filter:blur(20px) saturate(180%);
     backdrop-filter:blur(20px) saturate(180%); border-radius:999px;
-    padding:7px 8px; display:none; align-items:center; gap:4px;
+    padding:7px 8px; display:flex; align-items:center; gap:4px;
     box-shadow:0 10px 34px rgba(0,0,0,.28);
+    opacity:0; visibility:hidden; pointer-events:none;
+    transition:opacity .2s ease, transform .2s cubic-bezier(.16,1,.3,1), visibility 0s linear .2s;
   }
-  body.select-mode #select-bar{display:flex}
+  body.select-mode #select-bar{
+    opacity:1; visibility:visible; pointer-events:auto;
+    transform:translateX(-50%) translateY(0);
+    transition:opacity .2s ease, transform .2s cubic-bezier(.16,1,.3,1), visibility 0s;
+  }
   #select-bar .sb-btn{
     flex:1; border:none; background:transparent; color:#fff; font-size:16px;
     font-weight:500; padding:11px 8px; border-radius:999px; cursor:pointer;
@@ -184,8 +199,15 @@
     position:fixed; inset:0; z-index:10; display:none;
     background:rgba(0,0,0,.35); align-items:flex-end; justify-content:center;
     -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    transition:opacity .22s ease;
   }
   #sheet.open, #confirm-sheet.open, #token-sheet.open{display:flex}
+  /* 关闭动画:容器淡出+面板下滑(240ms 后移除 open);动画期间禁点 */
+  #sheet.closing, #confirm-sheet.closing, #token-sheet.closing{opacity:0; pointer-events:none}
+  #sheet.closing .panel, #confirm-sheet.closing .panel, #token-sheet.closing .panel{
+    transform:translateY(80px); transition:transform .22s ease; pointer-events:none;
+  }
+  .panel{transition:transform .22s ease}
   .panel{
     width:100%; max-width:640px; background:var(--card);
     border-radius:20px 20px 0 0; padding:10px 16px calc(env(safe-area-inset-bottom) + 16px);
@@ -271,7 +293,10 @@
   </div>
 </header>
 
-<input id="search" type="search" placeholder="搜阵容名 / 标签 / 码…" autocomplete="off">
+<div class="search-wrap">
+  <input id="search" type="search" placeholder="搜阵容名 / 标签 / 码…" autocomplete="off">
+  <button type="button" id="search-clear" aria-label="清空搜索" hidden>✕</button>
+</div>
 <div class="chips" id="seasons"></div>
 <button class="tag-toggle" id="tag-toggle" hidden><span id="tag-toggle-label">标签筛选</span><span class="tag-arrow">▾</span></button>
 <div class="chips" id="tag-chips" hidden></div>
@@ -532,7 +557,9 @@ function requestDelete(ids){
   }
   document.getElementById("confirm-msg").textContent=msg;
   document.getElementById("confirm-desc").textContent="删除后无法恢复";
-  document.getElementById("confirm-sheet").classList.add("open");
+  var cs=document.getElementById("confirm-sheet");
+  cancelDismiss(cs);
+  cs.classList.add("open");
 }
 function confirmDelete(){
   if(!pendingDeleteIds) return;
@@ -545,7 +572,17 @@ function confirmDelete(){
   closeConfirm();
   if(cloudOn()) syncPush();                         // 墓碑随本次推送一并剔除云端
 }
-function closeConfirm(){ document.getElementById("confirm-sheet").classList.remove("open"); }
+var dismissTimers={};
+function cancelDismiss(el){ clearTimeout(dismissTimers[el.id]); el.classList.remove("closing"); }
+function dismiss(el){
+  cancelDismiss(el);
+  el.classList.add("closing");                    // 淡出+下滑(仍 display flex)
+  dismissTimers[el.id]=setTimeout(function(){
+    el.classList.remove("closing"); el.classList.remove("open");
+    delete dismissTimers[el.id];
+  }, 240);
+}
+function closeConfirm(){ dismiss(document.getElementById("confirm-sheet")); }
 
 /* ---------- 动作 ---------- */
 function toast(msg){
@@ -592,7 +629,9 @@ function openSheet(item){
   refreshSeasonSuggest();
   document.getElementById("sheet-title").textContent=item? "编辑阵容" : "存阵容";
   document.getElementById("sheet-hint").textContent=item? "修改后点保存（阵容码也可改）" : "从公众号 / B站简介复制后直接粘贴，自动提取阵容码和名字";
-  document.getElementById("sheet").classList.add("open");
+  var sh=document.getElementById("sheet");
+  cancelDismiss(sh);
+  sh.classList.add("open");
   // 不自动读剪贴板(避免 iOS 系统粘贴条/权限浮层干扰表单),由用户点「从剪贴板粘贴」触发
 }
 function pasteFromClipboard(){
@@ -613,14 +652,14 @@ function pasteFromClipboard(){
     }
   },function(){ toast("读取被拒，可长按输入框系统粘贴"); });
 }
-function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
+function closeSheet(){ dismiss(document.getElementById("sheet")); }
 
 /* ---------- 表单下拉关闭(iOS sheet 手势) ---------- */
 (function(){
   var sheet=document.getElementById("sheet");
   var panel=sheet.querySelector(".panel");
   var grab=document.getElementById("sheet-grab");
-  var drag=null, suppressClick=0;
+  var drag=null;
   grab.addEventListener("pointerdown",function(ev){
     drag={y0:ev.clientY, dy:0, moved:false};
     try{ grab.setPointerCapture(ev.pointerId); }catch(e){}
@@ -636,7 +675,6 @@ function closeSheet(){ document.getElementById("sheet").classList.remove("open")
   function endDrag(){
     if(!drag) return;
     var d=drag; drag=null;
-    if(d.moved) suppressClick=Date.now()+350;       // 拖动后忽略合成 click
     if(d.moved&&d.dy>110){
       panel.style.transition="transform .22s cubic-bezier(.16,1,.3,1)";
       panel.style.transform="translateY(110%)";
@@ -651,11 +689,7 @@ function closeSheet(){ document.getElementById("sheet").classList.remove("open")
   }
   grab.addEventListener("pointerup",endDrag);
   grab.addEventListener("pointercancel",function(){ drag=null; panel.style.transition=""; panel.style.transform=""; });
-  grab.addEventListener("click",function(ev){
-    ev.stopPropagation();
-    if(Date.now()<suppressClick) return;            // 刚拖完不触发
-    closeSheet();                                    // 点横线区=收起
-  });
+  // 注:不做"点击横线关闭"(用户指定),仅下拉手势收起
 })();
 
 /* ---------- 事件 ---------- */
@@ -669,7 +703,18 @@ document.getElementById("sb-selectall").addEventListener("click",selectAllToggle
 document.getElementById("cf-ok").addEventListener("click",confirmDelete);
 document.getElementById("cf-cancel").addEventListener("click",closeConfirm);
 document.getElementById("confirm-sheet").addEventListener("click",closeConfirm);
-document.getElementById("search").addEventListener("input",function(){ q=this.value; render(); });
+document.getElementById("search").addEventListener("input",function(){
+  q=this.value;
+  document.getElementById("search-clear").hidden=!q;
+  render();
+});
+document.getElementById("search-clear").addEventListener("click",function(){
+  var s=document.getElementById("search");
+  s.value=""; q="";
+  this.hidden=true;
+  s.focus();
+  render();
+});
 document.getElementById("seasons").addEventListener("click",function(ev){
   var chip=ev.target.closest(".chip"); if(!chip) return;
   var s=chip.dataset.season;
@@ -735,8 +780,6 @@ document.getElementById("list").addEventListener("click",function(ev){
   if(Date.now()<suppressClickUntil){ suppressClickUntil=0; return; } // 刚拖完的合成 click
   var li=ev.target.closest("li.item"); if(!li) return;
   var id=li.dataset.id;
-  var favBtn=ev.target.closest(".fav-btn");
-  if(favBtn){ toggleFav(id); return; }         // 点星=收藏/取消(不影响复制)
   var editBtn=ev.target.closest(".swipe-edit");
   if(editBtn){                                   // 滑动露出的编辑
     var eit=null;
@@ -746,7 +789,9 @@ document.getElementById("list").addEventListener("click",function(ev){
   }
   var delBtn=ev.target.closest(".swipe-del");
   if(delBtn){ requestDelete([id]); return; }  // 滑动露出的删除
-  if(selecting){ toggleSelect(id); return; }  // 选择模式:点任意处(含勾选圈)=切换
+  if(selecting){ toggleSelect(id); return; }  // 选择模式:点任意处(含收藏星)=切换选中
+  var favBtn=ev.target.closest(".fav-btn");
+  if(favBtn){ toggleFav(id); return; }         // 常态:点星=收藏/取消(不影响复制)
   if(li.classList.contains("open")){ closeSwipes(); return; } // 点已滑开的行:先收回,不复制
   // 点卡片上的徽章直接筛选(点中=筛该值,再点=取消)
   var tagEl=ev.target.closest(".tag:not(.season)");
@@ -956,9 +1001,11 @@ function rememberTombstones(){                      // 删除记账(离线也能
 }
 function openTokenSheet(){
   document.getElementById("cc-token-input").value=CLOUD.token;
-  document.getElementById("token-sheet").classList.add("open");
+  var s=document.getElementById("token-sheet");
+  cancelDismiss(s);
+  s.classList.add("open");
 }
-function closeTokenSheet(){ document.getElementById("token-sheet").classList.remove("open"); }
+function closeTokenSheet(){ dismiss(document.getElementById("token-sheet")); }
 function saveToken(){
   var t=document.getElementById("cc-token-input").value.trim();
   if(!t){ toast("令牌不能为空"); return; }
