@@ -52,12 +52,15 @@
   #search::placeholder{color:#98989f}
   .chips{display:flex; gap:8px; padding:10px 16px 2px; overflow-x:auto; scrollbar-width:none}
   .chips::-webkit-scrollbar{display:none}
+  #tag-chips{padding-top:6px}
   .chip{
     border:none; border-radius:999px; padding:7px 14px; font-size:13px; font-weight:600;
     background:#e4e4e9; color:var(--sub); white-space:nowrap; cursor:pointer; flex-shrink:0;
     transition:background .15s, color .15s;
   }
   .chip.on{background:var(--ink); color:#fff}
+  .chip.tag-chip{background:rgba(217,164,65,.18); color:var(--accent-ink)}
+  .chip.tag-chip.on{background:var(--ink); color:#fff}
   /* ---------- 列表 ---------- */
   #list{list-style:none; margin:10px 0 0; padding:0 16px}
   .item{
@@ -96,7 +99,7 @@
   .item-name{font-size:16px; font-weight:650; letter-spacing:-.01em; word-break:break-all}
   .tag{
     flex-shrink:0; font-size:11px; font-weight:600; color:var(--accent-ink);
-    background:rgba(217,164,65,.16); border-radius:6px; padding:2px 7px;
+    background:rgba(217,164,65,.16); border-radius:6px; padding:2px 7px; cursor:pointer;
   }
   .tag.season{color:#fff; background:#3a3a3c}
   .item-code{
@@ -222,6 +225,7 @@
 
 <input id="search" type="search" placeholder="搜阵容名 / 标签 / 码…" autocomplete="off">
 <div class="chips" id="seasons"></div>
+<div class="chips" id="tag-chips" hidden></div>
 
 <ul id="list"></ul>
 <div id="empty" class="empty" hidden>
@@ -280,9 +284,9 @@
 <script>
 (function(){
 "use strict";
-var KEY="jccCompCodes.v1", FILTER_KEY="jccCompCodes.seasonFilter", LAST_SEASON_KEY="jccCompCodes.lastSeason";
+var KEY="jccCompCodes.v1", FILTER_KEY="jccCompCodes.seasonFilter", TAG_FILTER_KEY="jccCompCodes.tagFilter", LAST_SEASON_KEY="jccCompCodes.lastSeason";
 var DEFAULT_SEASON="S18"; // 当前赛季,换季改这里
-var list=[], q="", seasonFilter=null; // null=全部
+var list=[], q="", seasonFilter=null, tagFilter=null; // null=全部
 var selecting=false, selected={}, selectAllFlag=false;
 
 /* ---------- 纯函数:粘贴解析（node 可测） ---------- */
@@ -320,6 +324,7 @@ function load(){
   list.forEach(function(it){ if(!it.season){ it.season=DEFAULT_SEASON; changed=true; } }); // 旧数据归当前赛季
   if(changed) save();
   try{ seasonFilter=localStorage.getItem(FILTER_KEY)||null; }catch(e){}
+  try{ tagFilter=localStorage.getItem(TAG_FILTER_KEY)||null; }catch(e){}
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(list)); }
 
@@ -338,31 +343,52 @@ function refreshSeasonChips(){
     return '<button class="chip'+(seasonFilter===c.v?" on":"")+'" data-season="'+esc(c.v===null?"__ALL__":c.v)+'">'+esc(c.t)+'</button>';
   }).join("");
 }
+function refreshTagChips(){
+  var tags=[], seen={};
+  list.forEach(function(it){ var t=(it.tag||"").trim(); if(t&&!seen[t]){ seen[t]=1; tags.push(t); } });
+  tags.sort();
+  var box=document.getElementById("tag-chips");
+  box.hidden=!tags.length;
+  if(tagFilter&&tags.indexOf(tagFilter)<0){ tagFilter=null; try{localStorage.removeItem(TAG_FILTER_KEY);}catch(e){} }
+  var chips=[{v:"__NONE__",t:"全部标签"}].concat(tags.map(function(s){return {v:s,t:s};}));
+  box.innerHTML=chips.map(function(c){
+    return '<button class="chip tag-chip'+(tagFilter===null&&c.v==="__NONE__"||tagFilter===c.v?" on":"")+'" data-tag="'+esc(c.v)+'">'+esc(c.t)+'</button>';
+  }).join("");
+}
 function visibleRows(){
   var k=(q||"").toLowerCase();
   return list.filter(function(it){
     if(seasonFilter&&it.season!==seasonFilter) return false;
+    if(tagFilter&&(it.tag||"")!==tagFilter) return false;
     if(!k) return true;
     return (it.name+" "+it.tag+" "+it.season+" "+it.code).toLowerCase().indexOf(k)>-1;
   }).sort(function(a,b){return b.ts-a.ts;});
+}
+function activeFilters(){
+  var parts=[];
+  if(q) parts.push("“"+q+"”");
+  if(seasonFilter) parts.push(seasonFilter);
+  if(tagFilter) parts.push("标签 "+tagFilter);
+  return parts.join(" + ");
 }
 function updateSelectUI(){
   var n=list.length, sn=Object.keys(selected).length;
   document.getElementById("count").textContent=selecting?
     (sn? "已选 "+sn+" 项" : "选择阵容") :
-    (n? n+" 套"+(seasonFilter?" · "+seasonFilter:"")+(q&&visibleRows().length!==n?" · 命中 "+visibleRows().length:""):"");
+    (n? n+" 套"+(seasonFilter? " · "+seasonFilter:"")+(tagFilter? " · "+tagFilter:"")+(q&&visibleRows().length!==n?" · 命中 "+visibleRows().length:""):"");
   document.getElementById("sb-delete").textContent=sn? "删除("+sn+")" : "删除";
   document.getElementById("sb-delete").disabled=!sn;
   var visible=visibleRows().length;
   document.getElementById("sb-selectall").textContent=
     (visible&&Object.keys(selected).length===visible)&&visible>0 ? "取消全选" : "全选";
   document.getElementById("empty-text").innerHTML=list.length?
-    "没有匹配「"+esc(q||seasonFilter||"")+"」的阵容" :
+    "没有匹配「"+esc(activeFilters()||"当前条件")+"」的阵容" :
     "还没有阵容码<br>点下面「存阵容」把好阵容收进来";
 }
 function render(){
   var rows=visibleRows();
   refreshSeasonChips();
+  refreshTagChips();
   var ul=document.getElementById("list");
   ul.innerHTML=rows.map(function(it){
     var sel=selected[it.id]?true:false;
@@ -511,6 +537,13 @@ document.getElementById("seasons").addEventListener("click",function(ev){
   try{ seasonFilter? localStorage.setItem(FILTER_KEY,seasonFilter) : localStorage.removeItem(FILTER_KEY); }catch(e){}
   render();
 });
+document.getElementById("tag-chips").addEventListener("click",function(ev){
+  var chip=ev.target.closest(".chip"); if(!chip) return;
+  var t=chip.dataset.tag;
+  tagFilter=(t==="__NONE__")? null : t;
+  try{ tagFilter? localStorage.setItem(TAG_FILTER_KEY,tagFilter) : localStorage.removeItem(TAG_FILTER_KEY); }catch(e){}
+  render();
+});
 /* ---------- 左滑删除(常态;选择模式下滑动禁用) ---------- */
 var SWIPE_W=96, drag=null, suppressClickUntil=0;
 function closeSwipes(excludeLi){
@@ -564,7 +597,22 @@ document.getElementById("list").addEventListener("click",function(ev){
   var delBtn=ev.target.closest(".swipe-del");
   if(delBtn){ requestDelete([id]); return; }  // 滑动露出的删除
   if(selecting){ toggleSelect(id); return; }  // 选择模式:点任意处(含勾选圈)=切换
-  if(li.classList.contains("open")){ closeSwipes(li); return; } // 点已滑开的行:先收回,不复制
+  if(li.classList.contains("open")){ closeSwipes(); return; } // 点已滑开的行:先收回,不复制
+  // 点卡片上的徽章直接筛选(点中=筛该值,再点=取消)
+  var tagEl=ev.target.closest(".tag:not(.season)");
+  if(tagEl){
+    var tv=tagEl.textContent;
+    tagFilter=(tagFilter===tv)? null : tv;
+    try{ tagFilter? localStorage.setItem(TAG_FILTER_KEY,tagFilter) : localStorage.removeItem(TAG_FILTER_KEY); }catch(e){}
+    render(); return;
+  }
+  var seaEl=ev.target.closest(".tag.season");
+  if(seaEl){
+    var sv=seaEl.textContent;
+    seasonFilter=(seasonFilter===sv)? null : sv;
+    try{ seasonFilter? localStorage.setItem(FILTER_KEY,seasonFilter) : localStorage.removeItem(FILTER_KEY); }catch(e){}
+    render(); return;
+  }
   if(!ev.target.closest(".item-content")) return;
   var it=list.filter(function(x){return x.id===id;})[0];
   if(!it) return;

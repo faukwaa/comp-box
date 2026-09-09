@@ -28,7 +28,7 @@ with sync_playwright() as pw:
     pg.fill("#raw", "【福星临门】" + CODE)
     pg.click("#btn-save")
     check("存1:S18 列表1条", pg.locator("li.item").count() == 1)
-    check("chip 含 S18", pg.locator(".chip", has_text="S18").count() >= 1)
+    check("chip 含 S18", pg.locator("#seasons .chip", has_text="S18").count() >= 1)
     check("选择按钮出现", pg.locator("#select-btn").is_visible())
 
     # 1b. 点击存阵容自动读剪贴板
@@ -51,13 +51,13 @@ with sync_playwright() as pw:
     check("存3:S17 列表3条", pg.locator("li.item").count() == 3)
 
     # 3. 赛季筛选
-    pg.locator(".chip", has_text="S17").click()
+    pg.locator("#seasons .chip", has_text="S17").click()
     check("筛S17 1条", pg.locator("li.item").count() == 1)
     check("筛S17 命中天将九五", "天将九五" in pg.locator("li.item", has_text="天将九五").inner_text())
-    pg.locator(".chip", has_text="S18").click()
+    pg.locator("#seasons .chip", has_text="S18").click()
     check("筛S18 2条", pg.locator("li.item").count() == 2)
     check("S18 徽标在卡片上", pg.locator("li.item .tag.season").first.inner_text() == "S18")
-    pg.locator(".chip", has_text="全部").click()
+    pg.locator("#seasons .chip", has_text="全部").click()
     check("回全部 3条", pg.locator("li.item").count() == 3)
 
     # 4. 搜索
@@ -105,10 +105,10 @@ with sync_playwright() as pw:
     check("确认删除后滑条收起", pg.locator("li.item.open").count() == 0)
 
     # 6. 筛选记忆
-    pg.locator(".chip", has_text="S17").click()
+    pg.locator("#seasons .chip", has_text="S17").click()
     pg.reload()
     check("重载记住S17筛选", pg.locator("li.item").count() == 1 and "天将九五" in pg.locator("li.item").inner_text())
-    pg.locator(".chip", has_text="全部").click()
+    pg.locator("#seasons .chip", has_text="全部").click()
 
     # 7. 选择模式:点勾选圈勾选 → 底部删除(1) → 确认弹层 → 删除
     pg.click("#select-btn")
@@ -156,6 +156,42 @@ with sync_playwright() as pw:
     old = pg.evaluate("JSON.parse(localStorage.getItem('jccCompCodes.v1'))[0]")
     check("旧数据补 season=S18", old["season"] == "S18")
     check("旧数据显示", "旧数据" in pg.locator("li.item").inner_text())
+
+    # 11. 标签筛选:塞 4 条带标签数据
+    pg.evaluate(f"""localStorage.setItem('jccCompCodes.v1', JSON.stringify([
+      {{id:'a1',code:'{CODE}',name:'福星回归',tag:'追三星',season:'S18',ts:Date.now()}},
+      {{id:'a2',code:'{CODE2}',name:'天将九五',tag:'追三星',season:'S17',ts:Date.now()-1}},
+      {{id:'a3',code:'{CODE}',name:'裁决婕拉',tag:'上分',season:'S18',ts:Date.now()-2}},
+      {{id:'a4',code:'{CODE2}',name:'零标签阵容',tag:'',season:'S18',ts:Date.now()-3}}
+    ]))""")
+    pg.reload()
+    check("标签 chips 行出现", pg.locator("#tag-chips").is_visible())
+    check("chips 含追三星", pg.locator("#tag-chips .chip", has_text="追三星").count() == 1)
+    check("chips 含上分", pg.locator("#tag-chips .chip", has_text="上分").count() == 1)
+    check("全部4条可见", pg.locator("li.item").count() == 4)
+    # 点标签 chip 筛"追三星"
+    pg.locator("#tag-chips .chip", has_text="追三星").click()
+    check("筛追三星 2条", pg.locator("li.item").count() == 2)
+    check("chips 追三星高亮", "on" in pg.locator("#tag-chips .chip", has_text="追三星").get_attribute("class"))
+    # 与赛季叠加:S17
+    pg.locator("#seasons .chip", has_text="S17").click()
+    check("追三星+S17 1条", pg.locator("li.item").count() == 1)
+    check("组合命中天将", "天将九五" in pg.locator("li.item").inner_text())
+    check("计数显示双条件", "S17" in pg.locator("#count").inner_text() and "追三星" in pg.locator("#count").inner_text())
+    # 点卡片上 tag 徽章=取消标签筛选(season 保留)
+    pg.locator("li.item .tag:not(.season)").click()
+    check("点徽章取消标签筛", pg.locator("li.item").count() == 1)
+    check("赛季筛仍保留", "S17" in pg.locator("#count").inner_text())
+    check("全部标签 chip 高亮", "on" in pg.locator("#tag-chips .chip", has_text="全部标签").get_attribute("class"))
+    # 点卡片上 season 徽章=取消赛季筛选
+    pg.locator("li.item .tag.season").click()
+    check("点赛季徽章取消赛季筛", pg.locator("li.item").count() == 4)
+    # 从 chips 行选中标签后点卡片徽章切到同标签=取消;这里验证点 season 徽章能直接启用赛季筛选
+    pg.locator("li.item", has_text="裁决婕拉").locator(".tag.season").click()
+    check("点赛季徽章启用S18筛", pg.locator("li.item").count() == 3 and "S18" in pg.locator("#count").inner_text())
+    pg.locator("li.item", has_text="裁决婕拉").locator(".tag:not(.season)").click()
+    check("点标签徽章启用上分筛", pg.locator("li.item").count() == 1 and "上分" in pg.locator("#count").inner_text())
+    check("S18+上分 命中裁决", "裁决婕拉" in pg.locator("li.item").inner_text())
 
     check("无 console 错误", not [e for e in errs if "favicon" not in e])
     b.close()
