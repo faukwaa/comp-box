@@ -22,7 +22,7 @@
     background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
     font-size:16px; line-height:1.45;
-    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 130px);
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 100px);
     max-width:640px; margin:0 auto; min-height:100%;
   }
   /* ---------- 顶栏 ---------- */
@@ -202,13 +202,6 @@
   }
   #fab:active{transform:translateX(-50%) scale(.985)}
   body.select-mode #fab{display:none}
-  .toolbar{
-    position:fixed; left:50%; transform:translateX(-50%);
-    bottom:calc(env(safe-area-inset-bottom) + 78px); z-index:4;
-    display:flex; gap:16px; font-size:12px;
-  }
-  body.select-mode .toolbar{display:none}
-  .toolbar button{background:none; border:none; color:var(--sub); font-size:13px; cursor:pointer; padding:4px}
   /* ---------- 弹层 ---------- */
   #sheet, #confirm-sheet, #token-sheet{
     position:fixed; inset:0; z-index:10;
@@ -364,12 +357,6 @@
   <button class="sb-btn danger" id="sb-delete" disabled>删除</button>
 </div>
 
-<!-- 常态底部 -->
-<div class="toolbar" id="toolbar" hidden>
-  <button id="btn-export">导出备份</button>
-  <button id="btn-import">导入恢复</button>
-  <input type="file" id="file" accept="application/json,.json" hidden>
-</div>
 <button id="fab">＋ 存阵容</button>
 
 <!-- 存阵容表单 -->
@@ -560,7 +547,6 @@ function render(){
   }).join("");
   var empty=document.getElementById("empty");
   empty.hidden=rows.length>0;
-  document.getElementById("toolbar").hidden=list.length<1;
   document.getElementById("select-btn").hidden=list.length<1;
   updateSelectUI();
 }
@@ -915,42 +901,6 @@ document.getElementById("btn-save").addEventListener("click",function(){
   save(); render(); closeSheet();
   if(cloudOn()) syncPush();
 });
-document.getElementById("btn-export").addEventListener("click",function(){
-  var blob=new Blob([JSON.stringify(list,null,1)],{type:"application/json"});
-  var a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="jcc-codes-"+new Date().toISOString().slice(0,10)+".json";
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){URL.revokeObjectURL(a.href); document.body.removeChild(a);},500);
-  toast("备份文件已导出");
-});
-document.getElementById("btn-import").addEventListener("click",function(){ document.getElementById("file").click(); });
-document.getElementById("file").addEventListener("change",function(){
-  var f=this.files[0]; if(!f) return;
-  var rd=new FileReader();
-  rd.onload=function(){
-    try{
-      var arr=JSON.parse(rd.result);
-      if(!Array.isArray(arr)) throw 0;
-      arr=arr.filter(function(x){return x&&x.code;}).map(function(x){
-        return makeItem(String(x.code),String(x.name||""),String(x.tag||""),String(x.season||"").toUpperCase(),Number(x.ts)||Date.now());
-      });
-      if(!arr.length){ toast("文件里没有阵容码"); return; }
-      if(confirm("导入 "+arr.length+" 套？将追加到现有列表")){
-        var have={};
-        list.forEach(function(x){ have[x.code]=1; });
-        var fresh=[];
-        arr.forEach(function(x){ if(!have[x.code]){ have[x.code]=1; fresh.push(x); } });
-        list=list.concat(fresh); save(); render();
-        toast(fresh.length===arr.length? "导入成功 "+arr.length+" 套" : "导入 "+fresh.length+" 套，跳过重复 "+(arr.length-fresh.length)+" 套");
-        if(cloudOn()) syncPush();
-      }
-    }catch(e){ toast("文件格式不对"); }
-  };
-  rd.readAsText(f);
-  this.value="";
-});
-
 /* ---------- 云同步(GitHub Contents API) ----------
    权威数据存私有仓 comp-box-data/data.json;localStorage 是离线缓存。
    sha 条件写入防并发;409 冲突→重拉按 ts 合并;删除靠本地墓碑剔除传播。
