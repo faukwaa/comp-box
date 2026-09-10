@@ -346,9 +346,11 @@ with sync_playwright() as pw:
     # 12f. 长赛季名:赛季徽章独占一行,不挤名字/标签
     pg.evaluate(f"""localStorage.setItem('jccCompCodes.v1', JSON.stringify([{{id:'long1',code:'{CODE}',name:'长赛季测试',tag:'适配基兰',season:'S16 恭喜发财',ts:Date.now()}}]))""")
     pg.reload()
-    check("赛季徽章独占一行", pg.locator("li.item .item-season-row .tag.season").count() == 1)
+    check("赛季徽章置顶一行", pg.locator("li.item .item-season-row .tag.season").count() == 1)
+    check("赛季行是首行", pg.evaluate("document.querySelector('li.item .ic-main').firstElementChild.classList.contains('item-season-row')"))
     check("长赛季完整显示(不截断)", pg.locator("li.item .item-season-row .tag.season").inner_text() == "S16 恭喜发财")
-    check("名字同一行不挤", pg.locator("li.item .item-row .tag.season").count() == 0)
+    check("标签在名字下方一行", pg.locator("li.item .item-tag-row .tag").count() == 1)
+    check("名字行不含标签", pg.locator("li.item .item-row .tag").count() == 0)
     check("列表无横向溢出", pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
     check("阵容名仍完整显示", "长赛季测试" in pg.locator("li.item").inner_text())
 
