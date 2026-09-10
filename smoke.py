@@ -343,6 +343,13 @@ with sync_playwright() as pw:
     srv.shutdown()
     pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
 
+    # 12f. 长赛季名:徽章截断,不挤爆列表布局
+    pg.evaluate(f"""localStorage.setItem('jccCompCodes.v1', JSON.stringify([{{id:'long1',code:'{CODE}',name:'长赛季测试',tag:'',season:'S16 恭喜发财',ts:Date.now()}}]))""")
+    pg.reload()
+    check("长赛季徽章限宽截断", pg.locator("li.item .tag.season").evaluate("el => el.getBoundingClientRect().width") <= 112)
+    check("列表无横向溢出", pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+    check("阵容名仍完整显示", "长赛季测试" in pg.locator("li.item").inner_text())
+
     check("无 console 错误", not [e for e in errs if "favicon" not in e and "409" not in e])
 
     # 13. 暗色模式(跟随系统)
