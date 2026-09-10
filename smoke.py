@@ -270,7 +270,7 @@ with sync_playwright() as pw:
 
     # 12. 云同步(真实本地 HTTP 服务器模拟 GitHub contents API)
     import http.server, threading
-    GH = {"sha": "sha0", "items": [], "ver": 0, "lock": threading.Lock()}
+    GH = {"sha": "sha0", "items": [], "graves": {}, "ver": 0, "lock": threading.Lock()}
     class GHSrv(http.server.BaseHTTPRequestHandler):
         def _hdr(self, code, ctype="application/json", body=""):
             self.send_response(code)
@@ -284,15 +284,17 @@ with sync_playwright() as pw:
         def do_GET(self):
             with GH["lock"]:
                 doc = {"sha": GH["sha"], "content": base64.b64encode(
-                    json.dumps({"v": 1, "items": GH["items"]}, ensure_ascii=False).encode()).decode()}
+                    json.dumps({"v": 1, "items": GH["items"], "graves": GH["graves"]}, ensure_ascii=False).encode()).decode()}
             self._hdr(200, body=json.dumps(doc))
         def do_PUT(self):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode() or "{}")
             with GH["lock"]:
                 if body.get("sha") and body["sha"] != GH["sha"]:
                     self._hdr(409, body='{"message":"conflict"}'); return
-                items = json.loads(base64.b64decode(body["content"]).decode())["items"]
-                GH["items"] = items; GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])
+                doc = json.loads(base64.b64decode(body["content"]).decode())
+                GH["items"] = doc["items"]
+                GH["graves"] = doc.get("graves", {})
+                GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])
             self._hdr(200, body=json.dumps({"content": {"sha": GH["sha"]}}))
         def log_message(self, *a): pass
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GHSrv)
@@ -340,6 +342,18 @@ with sync_playwright() as pw:
     check("旧副本被剔除(防复活)", waitfor(lambda: "旧副本幽灵" not in pg.locator("#list").inner_text()))
     check("剔除后条数正常", pg.locator("li.item").count() == 3)
     check("云端未被幽灵污染", len(GH["items"]) == 3 and not any(x["id"] == "ghost1" for x in GH["items"]))
+
+    # 12g. 跨设备墓碑:旧版设备把已删条目推回云端 → 本端墓碑自动纠正它
+    GH["items"].append({"id": "ghost2", "code": CODE + "z", "name": "复活副本", "tag": "", "season": "S18",
+                        "ts": int(time.time() * 1000) - 999000})
+    GH["ver"] += 1; GH["sha"] = "sha" + str(GH["ver"])      # 云端被旧版设备污染
+    pg.evaluate("""() => { const m = JSON.parse(localStorage.getItem('jccCompCodes.sync') || '{}');
+                            m.tomb = ['ghost2']; m.at = Date.now();
+                            localStorage.setItem('jccCompCodes.sync', JSON.stringify(m)); }""")
+    pg.reload()                                              # 启动同步:拉取→墓碑过滤→PUT 纠正云端
+    check("污染副本不进本端", waitfor(lambda: "复活副本" not in pg.locator("#list").inner_text()))
+    check("云端被墓碑纠正", waitfor(lambda: not any(x["id"] == "ghost2" for x in GH["items"])))
+    check("墓碑已同步到云端", waitfor(lambda: "ghost2" in GH["graves"]))
     srv.shutdown()
     pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
 

@@ -954,11 +954,19 @@ async function cloudGet(){
   if(!r.ok) throw new Error("cloud GET "+r.status);
   var d=await r.json();
   var doc=JSON.parse(b64decode(d.content)||"{}");
-  return {sha:d.sha, items:Array.isArray(doc.items)? doc.items: []};
+  return {sha:d.sha,
+          items:Array.isArray(doc.items)? doc.items : [],
+          graves:(doc.graves&&typeof doc.graves==="object")? doc.graves : {}};
 }
-async function cloudPut(items){
+// 墓碑:删除记账,随云端共享 → 任一设备删除,其他设备(含旧版推回的副本)都会被纠正
+function gravesObj(){ var o={}; tombstones.forEach(function(id){ o[id]=1; }); return o; }
+function mergeGraves(cloudGraves){                // 云端墓碑并入本地
+  var o=cloudGraves||{};
+  Object.keys(o).forEach(function(id){ if(tombstones.indexOf(id)<0) tombstones.push(id); });
+}
+async function cloudPut(items, g){
   var body={ message:"sync "+new Date().toISOString().slice(0,16),
-             content:b64encode(JSON.stringify({v:1, items:items})) };
+             content:b64encode(JSON.stringify({v:1, items:items, graves: g||gravesObj()})) };
   if(CLOUD.sha) body.sha=CLOUD.sha;
   var r=await ghReq("PUT", body);
   if(r.status===409){ var e=new Error("conflict"); e.conflict=true; throw e; }
@@ -1005,8 +1013,8 @@ async function syncPush(){                          // 本地改动 → 云端
   if(!cloudOn()) return;
   setSyncUI("syncing","同步中…");
   try{
-    await cloudPut(list);
-    CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
+    await cloudPut(list);                           // 携带本地墓碑一并上传
+    CLOUD.state="ok"; tombstones=[]; saveSyncMeta();// 墓碑已进云端,本地可清
     setSyncUI("ok","已同步 "+(new Date()).toLocaleTimeString());
   }catch(e){
     if(e.conflict){                                 // sha 过期:重拉合并后再推
@@ -1014,6 +1022,7 @@ async function syncPush(){                          // 本地改动 → 云端
         var g=await cloudGet();
         if(!g){ await cloudPut(list); }
         else{
+          mergeGraves(g.graves);                    // 云端墓碑并入(别端删除也生效)
           var merged=mergeLists(g.items, list);
           list=merged; save(); render();
           CLOUD.sha=g.sha; saveSyncMeta();
@@ -1033,11 +1042,16 @@ async function syncPull(){                          // 云端 → 本地(启动/
   try{
     var g=await cloudGet();
     if(g){
+      mergeGraves(g.graves);                        // 云端墓碑并入:跨设备删除传播
       var merged=mergeLists(g.items, list);
       var changed=JSON.stringify(merged)!==JSON.stringify(list);
+      var cg=g.graves||{};
+      var missingTomb=tombstones.some(function(id){ return !cg[id]; }); // 有新墓碑未上云
       list=merged; save(); render();
       CLOUD.sha=g.sha; saveSyncMeta();             // 先对齐云端 sha 再写
-      if(changed){ await cloudPut(merged); }        // 本端新增/删除一并上云
+      if(changed||missingTomb){
+        await cloudPut(merged);                    // 本端新增/删除上云并纠正被污染的云端
+      }
       CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
       setSyncUI("ok","已同步 "+(new Date()).toLocaleTimeString());
     }
