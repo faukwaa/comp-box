@@ -270,7 +270,7 @@ with sync_playwright() as pw:
 
     # 12. 云同步(真实本地 HTTP 服务器模拟 GitHub contents API)
     import http.server, threading
-    GH = {"sha": "sha0", "items": [], "graves": {}, "ver": 0, "lock": threading.Lock()}
+    GH = {"sha": "sha0", "items": [], "graves": {}, "ver": 0, "fail": 0, "lock": threading.Lock()}
     class GHSrv(http.server.BaseHTTPRequestHandler):
         def _hdr(self, code, ctype="application/json", body=""):
             self.send_response(code)
@@ -282,6 +282,7 @@ with sync_playwright() as pw:
             if body: self.wfile.write(body.encode() if isinstance(body, str) else body)
         def do_OPTIONS(self): self._hdr(204, "", "")
         def do_GET(self):
+            if GH.get("fail"): self._hdr(GH["fail"], body='{"message":"Bad credentials"}'); return
             with GH["lock"]:
                 doc = {"sha": GH["sha"], "content": base64.b64encode(
                     json.dumps({"v": 1, "items": GH["items"], "graves": GH["graves"]}, ensure_ascii=False).encode()).decode()}
@@ -354,6 +355,17 @@ with sync_playwright() as pw:
     check("污染副本不进本端", waitfor(lambda: "复活副本" not in pg.locator("#list").inner_text()))
     check("云端被墓碑纠正", waitfor(lambda: not any(x["id"] == "ghost2" for x in GH["items"])))
     check("墓碑已同步到云端", waitfor(lambda: "ghost2" in GH["graves"]))
+
+    # 12h. 令牌失效(GitHub 401):不许静默红灯,必须点名令牌,且点按钮直达重设(线上真实踩过)
+    GH["fail"] = 401
+    pg.reload()                                              # 启动自动 pull → 401
+    check("401 按钮吐红", waitfor(lambda: pg.locator("#sync-btn.err").count() == 1))
+    check("401 提示令牌失效", waitfor(lambda: "令牌失效" in pg.locator("#toast").inner_text()))
+    pg.click("#sync-btn")
+    check("令牌失效→点按钮直达令牌设置", waitfor(lambda: pg.locator("#token-sheet.open").count() == 1))
+    GH["fail"] = 0
+    pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase');"
+                "document.getElementById('token-sheet').classList.remove('open')")
     srv.shutdown()
     pg.evaluate("localStorage.removeItem('ccToken'); localStorage.removeItem('ccApiBase')")
 
@@ -368,7 +380,7 @@ with sync_playwright() as pw:
     check("列表无横向溢出", pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
     check("阵容名仍完整显示", "长赛季测试" in pg.locator("li.item").inner_text())
 
-    check("无 console 错误", not [e for e in errs if "favicon" not in e and "409" not in e])
+    check("无 console 错误", not [e for e in errs if not any(x in e for x in ("favicon", "409", "401"))])
 
     # 13. 暗色模式(跟随系统)
     ctxD = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="dark")

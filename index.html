@@ -951,12 +951,19 @@ function ghReq(method, bodyObj){
 async function cloudGet(){
   var r=await ghReq("GET");
   if(r.status===404) return null;                 // 云端还没有文件
-  if(!r.ok) throw new Error("cloud GET "+r.status);
+  if(!r.ok){ var e=new Error("cloud GET "+r.status); e.status=r.status; throw e; }
   var d=await r.json();
   var doc=JSON.parse(b64decode(d.content)||"{}");
   return {sha:d.sha,
           items:Array.isArray(doc.items)? doc.items : [],
           graves:(doc.graves&&typeof doc.graves==="object")? doc.graves : {}};
+}
+// 失败分诊:令牌坏了(401/403) vs 云端报错 vs 断网 — 三者修法不同,不能都只说"失败"
+function errInfo(e){
+  var s=e&&e.status;
+  if(s===401||s===403) return {token:true, ui:"令牌失效", msg:"令牌失效,点按按钮重设"};
+  if(s) return {token:false, ui:"云端出错 "+s, msg:"云端出错 "+s+",点按重试"};
+  return {token:false, ui:"网络不通", msg:"连不上 GitHub,检查网络"};
 }
 // 墓碑:删除记账,随云端共享 → 任一设备删除,其他设备(含旧版推回的副本)都会被纠正
 function gravesObj(){ var o={}; tombstones.forEach(function(id){ o[id]=1; }); return o; }
@@ -970,7 +977,7 @@ async function cloudPut(items, g){
   if(CLOUD.sha) body.sha=CLOUD.sha;
   var r=await ghReq("PUT", body);
   if(r.status===409){ var e=new Error("conflict"); e.conflict=true; throw e; }
-  if(!r.ok) throw new Error("cloud PUT "+r.status);
+  if(!r.ok){ var e2=new Error("cloud PUT "+r.status); e2.status=r.status; throw e2; }
   var d=await r.json();
   CLOUD.sha=d.content.sha;                        // 记新 sha,后续条件写入
   saveSyncMeta();
@@ -1031,9 +1038,17 @@ async function syncPush(){                          // 本地改动 → 云端
         CLOUD.state="ok"; tombstones=[]; saveSyncMeta();
         setSyncUI("ok","已同步");
         return;
-      }catch(e2){ CLOUD.state="err"; setSyncUI("err","冲突合并失败"); if(window.console) console.error("merge fail", e2); }
+      }catch(e2){
+        var x2=errInfo(e2);
+        CLOUD.state="err"; CLOUD.tokenErr=x2.token; setSyncUI("err",x2.token? x2.ui : "冲突合并失败");
+        toast(x2.token? x2.msg : "合并失败,点按重试");
+        if(window.console) console.error("merge fail", e2);
+        return;
+      }
     }
-    CLOUD.state="err"; setSyncUI("err","离线:改动已存本机,联网后自动同步");
+    var x=errInfo(e);                               // 失败不能静默:按钮染红之外必须说清原因
+    CLOUD.state="err"; CLOUD.tokenErr=x.token; setSyncUI("err", x.token? x.ui : x.ui+"(改动已存本机)");
+    toast(x.msg);
   }
 }
 async function syncPull(){                          // 云端 → 本地(启动/手动)
@@ -1056,7 +1071,9 @@ async function syncPull(){                          // 云端 → 本地(启动/
       setSyncUI("ok","已同步 "+(new Date()).toLocaleTimeString());
     }
   }catch(e){
-    CLOUD.state="err"; setSyncUI("err","同步失败,稍后重试");
+    var x=errInfo(e);
+    CLOUD.state="err"; CLOUD.tokenErr=x.token; setSyncUI("err", x.ui);
+    toast(x.msg);
   }
 }
 function rememberTombstones(){                      // 删除记账(离线也能传播删除)
@@ -1081,7 +1098,11 @@ function clearToken(){
   toast("已断开云同步"); closeTokenSheet();
   setTimeout(function(){ location.reload(); }, 400);
 }
-document.getElementById("sync-btn").addEventListener("click",function(){ cloudOn()? syncPull() : openTokenSheet(); });
+document.getElementById("sync-btn").addEventListener("click",function(){
+  if(!cloudOn()) return openTokenSheet();
+  if(CLOUD.tokenErr){ CLOUD.tokenErr=false; return openTokenSheet(); }  // 令牌坏了,直接去重设
+  syncPull();
+});
 document.getElementById("btn-token-save").addEventListener("click",saveToken);
 document.getElementById("btn-token-clear").addEventListener("click",clearToken);
 document.getElementById("token-sheet").addEventListener("click",closeTokenSheet);
